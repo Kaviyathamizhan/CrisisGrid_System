@@ -404,7 +404,6 @@ def main():
         logging_steps=cfg.logging_steps,
         save_steps=cfg.save_steps,
         report_to=["wandb"],
-        max_prompt_length=cfg.max_prompt_length,
         max_completion_length=cfg.max_completion_length,
     )
 
