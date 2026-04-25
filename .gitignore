@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Local artifacts
+checkpoints/
+logs/
+data/
+deploy_ready/
+patched_checkpoint_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Large docs (keep out of repo)
+*.pdf
+*.docx
+*.pptx
+*.xlsx
+
+# Temp extractions / scripts
+*_extracted.txt
+*_extracted*.txt
+_*.txt
+prepare_deploy.py
