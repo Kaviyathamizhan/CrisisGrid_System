@@ -399,12 +399,13 @@ def main():
     grpo_cfg = GRPOConfig(
         output_dir=cfg.output_dir,
         learning_rate=cfg.lr,
-        per_device_train_batch_size=cfg.batch_size,
+        per_device_train_batch_size=2,
         gradient_accumulation_steps=cfg.grad_accum,
         logging_steps=cfg.logging_steps,
         save_steps=cfg.save_steps,
         report_to=["wandb"],
         max_completion_length=cfg.max_completion_length,
+        num_generations=2,
     )
 
     trainer = GRPOTrainer(
