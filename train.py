@@ -219,6 +219,46 @@ def _checkpoint_kind(checkpoint_path: str) -> str:
     return "unknown"
 
 
+def get_clean_checkpoint_path(checkpoint_path: str):
+    import os
+    import json
+    from huggingface_hub import snapshot_download
+    
+    # If it's already a local directory, assume it's clean
+    if os.path.exists(checkpoint_path):
+        print(f"[Checkpoint] Using local path: {checkpoint_path}")
+        return checkpoint_path
+
+    # Use unique cache dir to avoid corruption
+    local_dir = "./patched_checkpoint_cache"
+
+    if not os.path.exists(local_dir):
+        print(f"[Checkpoint] Downloading from HF: {checkpoint_path}")
+        snapshot_download(repo_id=checkpoint_path, local_dir=local_dir)
+
+        config_path = os.path.join(local_dir, "adapter_config.json")
+
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                adapter_cfg = json.load(f)
+
+            removed_keys = []
+            for k in ["alora_invocation_tokens", "unsloth_version"]:
+                if k in adapter_cfg:
+                    adapter_cfg.pop(k)
+                    removed_keys.append(k)
+
+            with open(config_path, "w") as f:
+                json.dump(adapter_cfg, f, indent=2)
+
+            print(f"[Checkpoint] Cleaned keys: {removed_keys}")
+        else:
+            raise FileNotFoundError("adapter_config.json not found in checkpoint")
+    else:
+        print(f"[Checkpoint] Using cached patched checkpoint")
+
+    return local_dir
+
 def _load_model_and_tokenizer(checkpoint_path: str):
     from transformers import AutoModelForCausalLM, AutoTokenizer
     import torch
@@ -232,8 +272,10 @@ def _load_model_and_tokenizer(checkpoint_path: str):
 
     # Attach LoRA adapter from checkpoint
     from peft import PeftModel
+    
+    clean_path = get_clean_checkpoint_path(checkpoint_path)
 
-    model = PeftModel.from_pretrained(model, checkpoint_path, is_trainable=True)
+    model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
     print("Running in FULL PRECISION mode (pure HF + PEFT)")
     print("Loaded LoRA adapter successfully")
     model.eval()
