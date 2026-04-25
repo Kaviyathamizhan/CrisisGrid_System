@@ -104,19 +104,40 @@ def build_prompt(obs: dict) -> str:
 
 
 def load_model_and_tokenizer(lora_path_or_repo: str):
-    from unsloth import FastLanguageModel
+    import torch
     from peft import PeftModel
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=BASE_MODEL,
-        max_seq_length=2048,
-        load_in_4bit=True,
-        dtype=None,
-    )
-    # lora_path_or_repo can be a local path OR a HuggingFace repo id.
-    model = PeftModel.from_pretrained(model, lora_path_or_repo)
-    model.eval()
-    return model, tokenizer
+    try:
+        from unsloth import FastLanguageModel  # type: ignore
+
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=BASE_MODEL,
+            max_seq_length=2048,
+            load_in_4bit=True,
+            dtype=None,
+        )
+        model = PeftModel.from_pretrained(model, lora_path_or_repo)
+        model.eval()
+        return model, tokenizer
+    except ModuleNotFoundError:
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+        bnb_cfg = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL,
+            quantization_config=bnb_cfg,
+            device_map="auto",
+            torch_dtype=torch.float16,
+        )
+        model = PeftModel.from_pretrained(model, lora_path_or_repo)
+        model.eval()
+        return model, tokenizer
 
 
 def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 700) -> str:

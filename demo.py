@@ -149,24 +149,47 @@ def get_clean_checkpoint_path(checkpoint_path: str):
     return local_dir
 
 def load_model_and_tokenizer(checkpoint_path: str):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from peft import PeftModel
     import os
+    import torch
+    from peft import PeftModel
 
-    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-    model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL,
-        torch_dtype="auto",
-        device_map="auto"
-    )
     clean_path = get_clean_checkpoint_path(checkpoint_path)
     if os.path.exists(clean_path):
         print(f"Loaded checkpoint from: {clean_path} (local)")
     else:
         print(f"Loaded checkpoint from: {clean_path} (HuggingFace Hub)")
-    model = PeftModel.from_pretrained(model, clean_path)
-    model.eval()
-    return model, tokenizer
+
+    try:
+        from unsloth import FastLanguageModel  # type: ignore
+
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=BASE_MODEL,
+            max_seq_length=2048,
+            load_in_4bit=True,
+            dtype=None,
+        )
+        model = PeftModel.from_pretrained(model, clean_path)
+        model.eval()
+        return model, tokenizer
+    except ModuleNotFoundError:
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+        bnb_cfg = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            BASE_MODEL,
+            quantization_config=bnb_cfg,
+            device_map="auto",
+            torch_dtype=torch.float16,
+        )
+        model = PeftModel.from_pretrained(model, clean_path)
+        model.eval()
+        return model, tokenizer
 
 
 def generate_one(model, tokenizer, prompt: str, max_new_tokens: int) -> str:

@@ -3,7 +3,9 @@ title: CrisisGrid - Teaching LLMs to Save Cities Through Multi-Agent RL
 emoji: 🏙️
 colorFrom: red
 colorTo: blue
-sdk: static
+sdk: gradio
+app_file: app.py
+python_version: "3.10"
 pinned: false
 ---
 
