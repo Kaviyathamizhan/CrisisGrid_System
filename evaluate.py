@@ -176,6 +176,7 @@ def get_clean_checkpoint_path(checkpoint_path: str):
 def load_model_and_tokenizer(checkpoint_path: str):
     import os
     import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
 
     clean_path = get_clean_checkpoint_path(checkpoint_path)
@@ -184,38 +185,15 @@ def load_model_and_tokenizer(checkpoint_path: str):
     else:
         print(f"Loaded checkpoint from: {clean_path} (HuggingFace Hub)")
 
-    # Prefer Unsloth if installed, otherwise use Transformers 4-bit.
-    try:
-        from unsloth import FastLanguageModel  # type: ignore
-
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=BASE_MODEL,
-            max_seq_length=2048,
-            load_in_4bit=True,
-            dtype=None,
-        )
-        model = PeftModel.from_pretrained(model, clean_path)
-        model.eval()
-        return model, tokenizer
-    except ModuleNotFoundError:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-        bnb_cfg = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL,
-            quantization_config=bnb_cfg,
-            device_map="auto",
-            torch_dtype=torch.float16,
-        )
-        model = PeftModel.from_pretrained(model, clean_path)
-        model.eval()
-        return model, tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
+    )
+    model = PeftModel.from_pretrained(model, clean_path)
+    model.eval()
+    return model, tokenizer
 
 
 def generate_one(model, tokenizer, prompt: str, max_new_tokens: int, temperature: float, top_p: float) -> str:
