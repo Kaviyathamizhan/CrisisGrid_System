@@ -410,7 +410,7 @@ def main():
     trainer = GRPOTrainer(
         model=model,
         args=grpo_cfg,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         reward_funcs=reward_func,
     )
 
