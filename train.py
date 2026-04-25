@@ -149,42 +149,36 @@ def decode_action(
 
 def build_prompt(obs: dict) -> str:
     """
-    Minimal prompt: reuse the existing training.grpo_train prompt builder if present;
-    otherwise build a compact prompt locally.
+    Build a compact prompt locally for the current environment step.
     """
-    try:
-        from training.grpo_train import build_prompt as _bp  # type: ignore
+    timestep = obs.get("timestep", 0)
+    api_status = obs.get("api_status", "active")
+    schema_version = obs.get("current_schema_version", 1)
+    last_error = obs.get("last_error", None)
+    grid = obs.get("grid", [])
 
-        return _bp(obs)
-    except Exception:
-        timestep = obs.get("timestep", 0)
-        api_status = obs.get("api_status", "active")
-        schema_version = obs.get("current_schema_version", 1)
-        last_error = obs.get("last_error", None)
-        grid = obs.get("grid", [])
+    worst = []
+    for i, row in enumerate(grid):
+        for j, cell in enumerate(row):
+            sev = float(cell[1]) if len(cell) > 1 else 0.0
+            pop = float(cell[0]) if len(cell) > 0 else 0.0
+            worst.append((sev, i * 5 + j, pop))
+    worst.sort(reverse=True)
+    top3 = worst[:3]
 
-        worst = []
-        for i, row in enumerate(grid):
-            for j, cell in enumerate(row):
-                sev = float(cell[1]) if len(cell) > 1 else 0.0
-                pop = float(cell[0]) if len(cell) > 0 else 0.0
-                worst.append((sev, i * 5 + j, pop))
-        worst.sort(reverse=True)
-        top3 = worst[:3]
+    header = f"Step {timestep}/50 | API v{schema_version} | status={api_status}"
+    if api_status == "deprecated" and last_error:
+        header += f" | last_error={last_error}"
+    critical = " | ".join([f"z{z}(sev={s:.2f},pop={int(p)})" for s, z, p in top3])
 
-        header = f"Step {timestep}/50 | API v{schema_version} | status={api_status}"
-        if api_status == "deprecated" and last_error:
-            header += f" | last_error={last_error}"
-        critical = " | ".join([f"z{z}(sev={s:.2f},pop={int(p)})" for s, z, p in top3])
-
-        return (
-            "You are the Command Agent in a disaster response simulation.\n"
-            "Output ONLY one valid JSON command.\n"
-            "Required fields: intent, zone, resource, priority. Optional: units.\n"
-            "Valid values: intent=allocate|redirect|hold, zone=0-24, "
-            "resource=medicine|food|rescue|water|shelter, priority=high|medium|low.\n\n"
-            f"{header}\nCritical zones: {critical}\n\nYour JSON command:"
-        )
+    return (
+        "You are the Command Agent in a disaster response simulation.\n"
+        "Output ONLY one valid JSON command.\n"
+        "Required fields: intent, zone, resource, priority. Optional: units.\n"
+        "Valid values: intent=allocate|redirect|hold, zone=0-24, "
+        "resource=medicine|food|rescue|water|shelter, priority=high|medium|low.\n\n"
+        f"{header}\nCritical zones: {critical}\n\nYour JSON command:"
+    )
 
 
 @dataclass

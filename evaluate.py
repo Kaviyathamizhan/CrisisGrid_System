@@ -116,24 +116,19 @@ def decode_action(
 
 
 def build_prompt(obs: dict) -> str:
-    try:
-        from training.grpo_train import build_prompt as _bp  # type: ignore
-
-        return _bp(obs)
-    except Exception:
-        timestep = obs.get("timestep", 0)
-        grid = obs.get("grid", [])
-        worst = []
-        for i, row in enumerate(grid):
-            for j, cell in enumerate(row):
-                sev = float(cell[1]) if len(cell) > 1 else 0.0
-                worst.append((sev, i * 5 + j))
-        worst.sort(reverse=True)
-        top = [z for _, z in worst[:3]]
-        return (
-            "Output ONLY one valid JSON command with fields intent, zone, resource, priority, units.\n"
-            f"Step={timestep} critical_zones={top}\nYour JSON command:"
-        )
+    timestep = obs.get("timestep", 0)
+    grid = obs.get("grid", [])
+    worst = []
+    for i, row in enumerate(grid):
+        for j, cell in enumerate(row):
+            sev = float(cell[1]) if len(cell) > 1 else 0.0
+            worst.append((sev, i * 5 + j))
+    worst.sort(reverse=True)
+    top = [z for _, z in worst[:3]]
+    return (
+        "Output ONLY one valid JSON command with fields intent, zone, resource, priority, units.\n"
+        f"Step={timestep} critical_zones={top}\nYour JSON command:"
+    )
 
 
 def get_clean_checkpoint_path(checkpoint_path: str):

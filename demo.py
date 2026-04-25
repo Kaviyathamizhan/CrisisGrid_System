@@ -103,11 +103,7 @@ def decode_action(llm_text: str, rng: np.random.RandomState) -> Tuple[Dict[str, 
 
 
 def build_prompt(obs: dict) -> str:
-    try:
-        from training.grpo_train import build_prompt as _bp  # type: ignore
-        return _bp(obs)
-    except Exception:
-        return "Output ONLY one valid JSON command with keys intent, zone, resource, priority, units:"
+    return "Output ONLY one valid JSON command with keys intent, zone, resource, priority, units:"
 
 
 def get_clean_checkpoint_path(checkpoint_path: str):
