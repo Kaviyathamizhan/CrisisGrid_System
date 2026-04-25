@@ -415,19 +415,10 @@ def main():
         reward_funcs=reward_func,
     )
 
-    # Resume training from checkpoint directory
-    try:
-        # If this is a full TRL checkpoint, this will resume optimizer/scheduler state too.
-        # If it's adapter-only, TRL may raise; we fall back to starting a new Trainer run
-        # but still "resume" model weights via the LoRA adapter load above.
-        trainer.train(resume_from_checkpoint=cfg.checkpoint_path)
-    except Exception as e:
-        if ckpt_kind == "lora_adapter":
-            print(f"[train] resume_from_checkpoint failed for adapter-only checkpoint: {e}")
-            print("[train] continuing with LoRA-loaded weights (no trainer state to resume).")
-            trainer.train()
-        else:
-            raise
+    # LoRA weights are already loaded into the model via PeftModel.from_pretrained().
+    # No TRL trainer state to resume — just start training with the loaded weights.
+    print("[train] Starting GRPO training with pre-loaded LoRA weights...")
+    trainer.train()
 
     wandb.finish()
     print(f"[train] done. outputs in {cfg.output_dir}")
