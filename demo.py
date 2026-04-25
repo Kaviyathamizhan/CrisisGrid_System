@@ -26,7 +26,7 @@ sys.path.insert(0, REPO_ROOT)
 from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
-BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct"
+BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 
 
 def random_valid_message(rng: np.random.RandomState) -> Dict[str, Any]:
@@ -111,22 +111,21 @@ def build_prompt(obs: dict) -> str:
 
 
 def load_model_and_tokenizer(checkpoint_path: str):
-    from unsloth import FastLanguageModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
     import os
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=BASE_MODEL,
-        max_seq_length=2048,
-        load_in_4bit=False,
-        dtype=None,
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
     )
     if os.path.exists(checkpoint_path):
         print(f"Loaded checkpoint from: {checkpoint_path} (local)")
     else:
         print(f"Loaded checkpoint from: {checkpoint_path} (HuggingFace Hub)")
     model = PeftModel.from_pretrained(model, checkpoint_path)
-    FastLanguageModel.for_inference(model)
     model.eval()
     return model, tokenizer
 

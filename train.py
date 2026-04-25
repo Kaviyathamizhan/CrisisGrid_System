@@ -34,7 +34,7 @@ from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
 
-BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct"
+BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 REQUIRED_FIELDS = ("intent", "zone", "resource", "priority")
 
 
@@ -220,21 +220,21 @@ def _checkpoint_kind(checkpoint_path: str) -> str:
 
 
 def _load_model_and_tokenizer(checkpoint_path: str):
-    # Base model via Unsloth
-    from unsloth import FastLanguageModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import torch
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=BASE_MODEL,
-        max_seq_length=2048,
-        load_in_4bit=False,
-        dtype=None,
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
     )
 
     # Attach LoRA adapter from checkpoint
     from peft import PeftModel
 
     model = PeftModel.from_pretrained(model, checkpoint_path, is_trainable=True)
-    print("Running in FULL PRECISION mode (no bitsandbytes)")
+    print("Running in FULL PRECISION mode (pure HF + PEFT)")
     print("Loaded LoRA adapter successfully")
     model.eval()
     return model, tokenizer

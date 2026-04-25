@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
-parser.add_argument("--model",            default="unsloth/Qwen2-1.5B-Instruct")
+parser.add_argument("--model",            default="Qwen/Qwen2-1.5B-Instruct")
 parser.add_argument("--episodes",         type=int, default=200)
 parser.add_argument("--max-seq-len",      type=int, default=2048)
 parser.add_argument("--lora-r",           type=int, default=16)
@@ -73,28 +73,32 @@ except Exception:
     print("[wandb] Not available — logging to CSV only.")
     USE_WANDB = False
 
-# ── Model (Unsloth 4-bit) ─────────────────────────────────────────────────────
-from unsloth import FastLanguageModel
+# ── Model (Pure HF + PEFT) ───────────────────────────────────────────────────
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
 load_path = args.continue_from or args.model
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=load_path,
-    max_seq_length=args.max_seq_len,
-    load_in_4bit=False,
-    dtype=None,
+tokenizer = AutoTokenizer.from_pretrained(load_path)
+model = AutoModelForCausalLM.from_pretrained(
+    load_path,
+    torch_dtype="auto",
+    device_map="auto"
 )
+
 if not args.continue_from:
-    model = FastLanguageModel.get_peft_model(
-        model,
+    from peft import LoraConfig, get_peft_model
+    lora_config = LoraConfig(
         r=args.lora_r,
         lora_alpha=args.lora_alpha,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                         "gate_proj", "up_proj", "down_proj"],
         lora_dropout=0,
         bias="none",
-        use_gradient_checkpointing="unsloth",
+        task_type="CAUSAL_LM"
     )
+    model = get_peft_model(model, lora_config)
+    model.gradient_checkpointing_enable()
+
 print(f"[model] Loaded: {load_path}")
 
 # ── Prompt builder ────────────────────────────────────────────────────────────
