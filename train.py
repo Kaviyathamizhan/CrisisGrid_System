@@ -405,10 +405,6 @@ def main():
         save_steps=cfg.save_steps,
         report_to=["wandb"],
         max_completion_length=cfg.max_completion_length,
-        # TRL safety: generation_batch_size must be divisible by num_generations.
-        # Spaces/A100 defaults can mismatch (e.g. 4 vs 8) and hard-fail.
-        num_generations=4,
-        generation_batch_size=4,
     )
 
     trainer = GRPOTrainer(
