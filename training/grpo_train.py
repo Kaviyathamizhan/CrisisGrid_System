@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
-parser.add_argument("--model",            default="unsloth/Qwen2-1.5B-Instruct-bnb-4bit")
+parser.add_argument("--model",            default="unsloth/Qwen2-1.5B-Instruct")
 parser.add_argument("--episodes",         type=int, default=200)
 parser.add_argument("--max-seq-len",      type=int, default=2048)
 parser.add_argument("--lora-r",           type=int, default=16)
@@ -81,7 +81,7 @@ load_path = args.continue_from or args.model
 model, tokenizer = FastLanguageModel.from_pretrained(
     model_name=load_path,
     max_seq_length=args.max_seq_len,
-    load_in_4bit=True,
+    load_in_4bit=False,
     dtype=None,
 )
 if not args.continue_from:

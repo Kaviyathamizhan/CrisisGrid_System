@@ -26,7 +26,7 @@ sys.path.insert(0, REPO_ROOT)
 from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
-BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct-bnb-4bit"
+BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct"
 
 
 def random_valid_message(rng: np.random.RandomState) -> Dict[str, Any]:
@@ -118,7 +118,7 @@ def load_model_and_tokenizer(checkpoint_path: str):
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=BASE_MODEL,
         max_seq_length=2048,
-        load_in_4bit=True,
+        load_in_4bit=False,
         dtype=None,
     )
     if os.path.exists(checkpoint_path):
