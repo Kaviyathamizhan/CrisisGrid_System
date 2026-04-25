@@ -144,6 +144,7 @@ def decode_action(
             diag["decode_fallback"] = True
             return random_valid_message(rng), diag
 
+    print(f"[debug] decode_fallback={diag['decode_fallback']}")
     return msg, diag
 
 
@@ -304,9 +305,9 @@ def _sample_generate(model, tokenizer, prompt: str, max_new_tokens: int = 128) -
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint-path", default=os.getenv("CRISISGRID_CHECKPOINT_PATH", ""))
-    parser.add_argument("--episodes", type=int, default=int(os.getenv("CRISISGRID_EPISODES", "500")))
+    parser.add_argument("--episodes", type=int, default=int(os.getenv("CRISISGRID_EPISODES", "120")))
     parser.add_argument("--seed", type=int, default=int(os.getenv("CRISISGRID_SEED", "42")))
-    parser.add_argument("--max-completion-length", type=int, default=700)
+    parser.add_argument("--max-completion-length", type=int, default=600)
     parser.add_argument("--max-prompt-length", type=int, default=512)
     parser.add_argument("--lr", type=float, default=float(os.getenv("CRISISGRID_LR", "5e-5")))
     parser.add_argument("--batch-size", type=int, default=int(os.getenv("CRISISGRID_BATCH_SIZE", "1")))
@@ -317,6 +318,9 @@ def main():
     parser.add_argument("--no-sample-generation", action="store_true")
     parser.add_argument("--log-json-repairs", action="store_true")
     args = parser.parse_args()
+
+    if args.max_completion_length < 500:
+        print("WARNING: max_completion_length too low — may cause truncated JSON and reward collapse")
 
     if not args.checkpoint_path:
         raise SystemExit(
