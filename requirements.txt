@@ -1,12 +1,9 @@
 numpy>=1.26.0,<2.0
-torch>=2.2.0
-transformers>=4.45.0
-accelerate>=0.33.0
-bitsandbytes>=0.43.0
-peft>=0.12.0
-trl>=0.12.0
-unsloth>=2024.10
+torch>=2.2.0,<2.5
+transformers>=4.45.0,<4.48
+accelerate>=0.33.0,<0.35
+peft>=0.12.0,<0.14
+trl>=0.15.0,<0.16
 wandb>=0.17.0
 gradio>=4.44.0
-huggingface_hub>=0.24.0
 datasets>=2.16.0
