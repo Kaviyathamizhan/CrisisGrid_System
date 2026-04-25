@@ -242,9 +242,15 @@ def get_clean_checkpoint_path(checkpoint_path: str):
             with open(config_path, "r") as f:
                 adapter_cfg = json.load(f)
 
+            # Dynamically find all valid keys for pure PEFT
+            import inspect
+            from peft import LoraConfig
+            valid_keys = set(inspect.signature(LoraConfig.__init__).parameters.keys())
+            valid_keys.update(["peft_type", "auto_mapping", "base_model_name_or_path", "revision", "task_type", "inference_mode"])
+
             removed_keys = []
-            for k in ["alora_invocation_tokens", "unsloth_version"]:
-                if k in adapter_cfg:
+            for k in list(adapter_cfg.keys()):
+                if k not in valid_keys:
                     adapter_cfg.pop(k)
                     removed_keys.append(k)
 
