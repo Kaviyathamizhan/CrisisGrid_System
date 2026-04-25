@@ -34,7 +34,7 @@ from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
 
-BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct-bnb-4bit"
+BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 REQUIRED_FIELDS = ("intent", "zone", "resource", "priority")
 
 
@@ -260,51 +260,26 @@ def get_clean_checkpoint_path(checkpoint_path: str):
     return local_dir
 
 def _load_model_and_tokenizer(checkpoint_path: str):
-    """
-    Prefer Unsloth if available. If not installed (common in Spaces builds),
-    fall back to pure Transformers + bitsandbytes 4-bit loading.
-    """
-    clean_path = get_clean_checkpoint_path(checkpoint_path)
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import torch
+
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
+    )
 
     # Attach LoRA adapter from checkpoint
     from peft import PeftModel
+    
+    clean_path = get_clean_checkpoint_path(checkpoint_path)
 
-    try:
-        from unsloth import FastLanguageModel  # type: ignore
-
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=BASE_MODEL,
-            max_seq_length=2048,
-            load_in_4bit=True,
-            dtype=None,
-        )
-        model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
-        print("Loaded LoRA adapter successfully")
-        model.eval()
-        return model, tokenizer
-
-    except ModuleNotFoundError:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-        import torch
-
-        bnb_cfg = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL,
-            quantization_config=bnb_cfg,
-            device_map="auto",
-            torch_dtype=torch.float16,
-        )
-        model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
-        print("Loaded LoRA adapter successfully")
-        model.eval()
-        return model, tokenizer
+    model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
+    print("Running in FULL PRECISION mode (pure HF + PEFT)")
+    print("Loaded LoRA adapter successfully")
+    model.eval()
+    return model, tokenizer
 
 
 def _sample_generate(model, tokenizer, prompt: str, max_new_tokens: int = 128) -> str:
