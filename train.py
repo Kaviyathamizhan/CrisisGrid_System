@@ -396,6 +396,17 @@ def main():
                 env.reset()
         return rewards
 
+    # Build prompt dataset from environment observations
+    from datasets import Dataset as HFDataset
+    print(f"[dataset] Generating {cfg.episodes} episode prompts...")
+    prompt_records = []
+    dataset_env = CrisisGridEnv(seed=cfg.seed)
+    for i in range(cfg.episodes):
+        obs_i, _ = dataset_env.reset()
+        prompt_records.append({"prompt": build_prompt(obs_i)})
+    train_dataset = HFDataset.from_list(prompt_records)
+    print(f"[dataset] {len(train_dataset)} prompts ready.")
+
     grpo_cfg = GRPOConfig(
         output_dir=cfg.output_dir,
         learning_rate=cfg.lr,
@@ -413,6 +424,7 @@ def main():
         args=grpo_cfg,
         processing_class=tokenizer,
         reward_funcs=reward_func,
+        train_dataset=train_dataset,
     )
 
     # LoRA weights are already loaded into the model via PeftModel.from_pretrained().
