@@ -34,7 +34,7 @@ from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
 
-BASE_MODEL = "unsloth/Qwen2-7B-Instruct-bnb-8bit"
+BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct-bnb-4bit"
 REQUIRED_FIELDS = ("intent", "zone", "resource", "priority")
 
 
@@ -204,6 +204,21 @@ class TrainConfig:
     log_json_repairs: bool
 
 
+def _checkpoint_kind(checkpoint_path: str) -> str:
+    """
+    Detect whether checkpoint_path looks like:
+      - a TRL/HF Trainer checkpoint (contains trainer_state.json), OR
+      - an adapter-only LoRA checkpoint (contains adapter_config.json), OR
+      - unknown.
+    """
+    if os.path.isdir(checkpoint_path):
+        if os.path.exists(os.path.join(checkpoint_path, "trainer_state.json")):
+            return "trl_checkpoint"
+        if os.path.exists(os.path.join(checkpoint_path, "adapter_config.json")):
+            return "lora_adapter"
+    return "unknown"
+
+
 def _load_model_and_tokenizer(checkpoint_path: str):
     # Base model via Unsloth
     from unsloth import FastLanguageModel
@@ -211,14 +226,15 @@ def _load_model_and_tokenizer(checkpoint_path: str):
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=BASE_MODEL,
         max_seq_length=2048,
-        load_in_4bit=False,  # base is 8bit; keep default behavior (bnb-8bit)
+        load_in_4bit=True,
         dtype=None,
     )
 
     # Attach LoRA adapter from checkpoint
     from peft import PeftModel
 
-    model = PeftModel.from_pretrained(model, checkpoint_path)
+    model = PeftModel.from_pretrained(model, checkpoint_path, is_trainable=True)
+    print("Loaded LoRA adapter successfully")
     model.eval()
     return model, tokenizer
 
@@ -263,6 +279,7 @@ def main():
         raise SystemExit(
             "Missing checkpoint path. Set CRISISGRID_CHECKPOINT_PATH or pass --checkpoint-path."
         )
+    # We no longer strictly check os.path.exists here because it could be a HuggingFace Hub repo path (e.g., 'thebosskt/crisisgrid-lora')
 
     cfg = TrainConfig(
         checkpoint_path=args.checkpoint_path,
@@ -290,6 +307,8 @@ def main():
     print(f"[train] base_model={BASE_MODEL}")
     print(f"[train] checkpoint_path={cfg.checkpoint_path}")
     print(f"[train] episodes={cfg.episodes} seed={cfg.seed} max_completion_length={cfg.max_completion_length}")
+    ckpt_kind = _checkpoint_kind(cfg.checkpoint_path)
+    print(f"[train] checkpoint_kind={ckpt_kind}")
 
     env = CrisisGridEnv(seed=cfg.seed)
     rng = np.random.RandomState(cfg.seed)
@@ -354,7 +373,18 @@ def main():
     )
 
     # Resume training from checkpoint directory
-    trainer.train(resume_from_checkpoint=cfg.checkpoint_path)
+    try:
+        # If this is a full TRL checkpoint, this will resume optimizer/scheduler state too.
+        # If it's adapter-only, TRL may raise; we fall back to starting a new Trainer run
+        # but still "resume" model weights via the LoRA adapter load above.
+        trainer.train(resume_from_checkpoint=cfg.checkpoint_path)
+    except Exception as e:
+        if ckpt_kind == "lora_adapter":
+            print(f"[train] resume_from_checkpoint failed for adapter-only checkpoint: {e}")
+            print("[train] continuing with LoRA-loaded weights (no trainer state to resume).")
+            trainer.train()
+        else:
+            raise
 
     wandb.finish()
     print(f"[train] done. outputs in {cfg.output_dir}")
