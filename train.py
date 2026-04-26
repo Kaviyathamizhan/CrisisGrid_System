@@ -313,7 +313,7 @@ def main():
     parser.add_argument("--batch-size", type=int, default=int(os.getenv("CRISISGRID_BATCH_SIZE", "1")))
     parser.add_argument("--grad-accum", type=int, default=int(os.getenv("CRISISGRID_GRAD_ACCUM", "4")))
     parser.add_argument("--logging-steps", type=int, default=int(os.getenv("CRISISGRID_LOGGING_STEPS", "10")))
-    parser.add_argument("--save-steps", type=int, default=int(os.getenv("CRISISGRID_SAVE_STEPS", "50")))
+    parser.add_argument("--save-steps", type=int, default=int(os.getenv("CRISISGRID_SAVE_STEPS", "20")))
     parser.add_argument("--output-dir", default=os.getenv("CRISISGRID_OUTPUT_DIR", "checkpoints_a100"))
     parser.add_argument("--no-sample-generation", action="store_true")
     parser.add_argument("--log-json-repairs", action="store_true")
