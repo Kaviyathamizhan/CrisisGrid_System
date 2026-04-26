@@ -103,7 +103,29 @@ def decode_action(llm_text: str, rng: np.random.RandomState) -> Tuple[Dict[str, 
 
 
 def build_prompt(obs: dict) -> str:
-    return "Output ONLY one valid JSON command with keys intent, zone, resource, priority, units:"
+    timestep = obs.get("timestep", 0)
+    api_status = obs.get("api_status", "active")
+    schema_version = obs.get("current_schema_version", 1)
+    last_error = obs.get("last_error", None)
+    grid = obs.get("grid", [])
+
+    worst = []
+    for i, row in enumerate(grid):
+        for j, cell in enumerate(row):
+            sev = float(cell[1]) if len(cell) > 1 else 0.0
+            worst.append((sev, i * 5 + j))
+    worst.sort(reverse=True)
+    top = [z for _, z in worst[:3]]
+
+    prompt = (
+        "You are the Command Agent for CrisisGrid.\n"
+        "Output ONLY one valid JSON command with keys: intent, zone, resource, priority, units.\n"
+        f"Schema={schema_version} API={api_status}\n"
+    )
+    if last_error:
+        prompt += f"LAST ERROR: {last_error}\n"
+    prompt += f"Step={timestep} critical_zones={top}\nYour JSON command:"
+    return prompt
 
 
 def get_clean_checkpoint_path(checkpoint_path: str):
