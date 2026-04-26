@@ -24,7 +24,8 @@ A Multi-Agent Reinforcement Learning Environment for Disaster Response Coordinat
 | 🤗 **Live Demo Space** | [huggingface.co/spaces/thebosskt/crisisgrid-train](https://huggingface.co/spaces/thebosskt/crisisgrid-train) |
 | 🧠 **Trained LoRA Weights** | [huggingface.co/thebosskt/crisisgrid-lora](https://huggingface.co/thebosskt/crisisgrid-lora) |
 | 📓 **Training Notebook** | [training_run.ipynb](./notebooks/training_run.ipynb) |
-| 📝 **Blog Post / Writeup** | [blog_post.md](./blog_post.md) |
+| 📝 **Blog Post / Writeup** | [Blog.md](./Blog.md) |
+| 📈 **WandB Training Logs** | [wandb.ai/kaviyathamizhan37-/crisisgrid](https://wandb.ai/kaviyathamizhan37-/crisisgrid/workspace?nw=nwuserkaviyathamizhan37) |
 
 ---
 
@@ -85,10 +86,15 @@ We used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fi
 > **Peak reward: 0.711 at step 20** — a **~2.3× improvement** over the baseline reward of ~0.30.
 > `decode_fallback=False` from step 17 onwards = **100% JSON structural stability**.
 
-<!-- If you have WandB plots, embed them here:
-![Reward Curve](./assets/reward_curve.png)
-*Training reward over steps. Peak at step 20 (0.711).*
--->
+### Training Plots
+
+![Reward Curves](./assets/reward_curves.png)
+*GRPO reward, loss, and KL divergence over training steps. Reward peaks at 0.711 (step 20).*
+
+![Training Charts](./assets/training_charts.png)
+*Survival rate, decode fallback, and JSON repair metrics. Fallback drops to zero at step 20.*
+
+> 📈 **Live WandB Dashboard**: [View all training metrics here](https://wandb.ai/kaviyathamizhan37-/crisisgrid/workspace?nw=nwuserkaviyathamizhan37)
 
 ---
 
