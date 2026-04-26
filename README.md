@@ -19,36 +19,76 @@ A Multi-Agent Reinforcement Learning Environment for Disaster Response Coordinat
 
 ## 📌 Quick Links
 
-- 🤗 **Live Demo Space**: [https://huggingface.co/spaces/thebosskt/crisisgrid-train](https://huggingface.co/spaces/thebosskt/crisisgrid-train)
-- 🧠 **Trained LoRA Weights**: [https://huggingface.co/thebosskt/crisisgrid-lora](https://huggingface.co/thebosskt/crisisgrid-lora)
-- 📓 **Training Notebook**: [training_run.ipynb](./notebooks/training_run.ipynb)
-- 📝 **Blog Post / Writeup**: [blog_post.md](./blog_post.md)
+| Resource | Link |
+|---|---|
+| 🤗 **Live Demo Space** | [huggingface.co/spaces/thebosskt/crisisgrid-train](https://huggingface.co/spaces/thebosskt/crisisgrid-train) |
+| 🧠 **Trained LoRA Weights** | [huggingface.co/thebosskt/crisisgrid-lora](https://huggingface.co/thebosskt/crisisgrid-lora) |
+| 📓 **Training Notebook** | [training_run.ipynb](./notebooks/training_run.ipynb) |
+| 📝 **Blog Post / Writeup** | [blog_post.md](./blog_post.md) |
 
 ---
 
-## 🎯 Problem Statement
+## 🎯 The Problem
 
-In real-world disaster scenarios, central command agents must coordinate resources across many zones simultaneously. The challenge: existing LLMs are structurally unstable when forced to output strict JSON API commands under dynamic, adversarial conditions.
+In real-world disaster scenarios, central command agents must coordinate resources across many zones simultaneously. Existing LLMs are structurally unstable when forced to output strict JSON API commands under dynamic, adversarial conditions. They hallucinate free-form text, ignore high-severity zones, and fail when APIs change mid-crisis.
 
-**CrisisGrid** is a custom 5×5 grid environment where an AI Command Agent must allocate resources (food, medicine, rescue, water, shelter) to 25 disaster zones to maximize population survival. The environment includes:
-- Dynamic severity escalation
-- Mid-episode schema drift (API changes at step 25)
-- Adversary agents that destabilize zones
-- Strict JSON communication protocol
+**CrisisGrid** asks: *Can we use reinforcement learning to teach a small LLM to reliably coordinate disaster response?*
 
 ---
 
-## 🚀 What We Trained
+## 🌍 The Environment
 
-We used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fine-tune a `Qwen/Qwen2-1.5B-Instruct` model with a LoRA adapter.
+CrisisGrid is a custom 5×5 grid environment where an AI Command Agent must allocate resources (food, medicine, rescue, water, shelter) to 25 disaster zones to maximize population survival.
 
-The reward function penalizes:
-- ❌ Invalid JSON output (decode fallback penalty)
-- ❌ Misallocating resources to low-severity zones
+**What makes it genuinely challenging:**
+- 🔥 **Dynamic Severity Escalation** — Unaddressed zones get worse every step
+- 🔄 **Mid-Episode Schema Drift** — The API schema changes at step 25; the agent must adapt or its commands fail
+- 👹 **Adversary Agent** — Randomly destabilizes zones, forcing reprioritization
+- 📋 **Strict JSON Protocol** — All commands must be valid JSON with exact field names
 
-And rewards:
-- ✅ Valid structured JSON every step
-- ✅ Targeting highest-severity zones
+**This is NOT a toy gridworld.** The agent must handle real-world challenges: API versioning, structured output under pressure, and adversarial conditions.
+
+---
+
+## 🏗️ Reward Signal Design (7 Components)
+
+Our reward is composable, informative, and hard to game:
+
+| Component | Value | What it Teaches |
+|---|---|---|
+| Severity Reduction | +1.0/unit | Allocate to high-severity zones |
+| Population Preserved | +0.3 | Keep people alive |
+| Valid Communication | +0.2 | Output proper JSON |
+| Schema Recovery | +2.0 (one-time) | Adapt to API changes |
+| Malformed Message | -0.5 | Don't hallucinate |
+| Default Action | -0.3 | Don't force fallback |
+| Full Stabilisation | +5.0 (terminal) | Solve the crisis completely |
+
+Plus a **token efficiency penalty** that prevents verbose outputs.
+
+---
+
+## 🚀 Training
+
+We used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fine-tune `Qwen/Qwen2-1.5B-Instruct` with a LoRA adapter (rank 16, alpha 32).
+
+### Training Progression
+
+| Step | Reward | Reward Std | Observation |
+|------|--------|------------|-------------|
+| 4 | 0.593 | 0.053 | Agent starts producing valid JSON |
+| 17 | 0.593 | 0.053 | Stable baseline established |
+| **20** | **0.711** | **0.035** | **Peak — checkpoint saved** |
+| 30 | 0.667 | 0.038 | Slight regression |
+| 40 | 0.608 | 0.037 | Over-exploration |
+
+> **Peak reward: 0.711 at step 20** — a **~2.3× improvement** over the baseline reward of ~0.30.
+> `decode_fallback=False` from step 17 onwards = **100% JSON structural stability**.
+
+<!-- If you have WandB plots, embed them here:
+![Reward Curve](./assets/reward_curve.png)
+*Training reward over steps. Peak at step 20 (0.711).*
+-->
 
 ---
 
@@ -56,12 +96,19 @@ And rewards:
 
 | Metric | Baseline (Random) | GRPO Trained Agent |
 |---|---|---|
-| Avg Survival Rate | ~30.8% | ~33–38% |
-| JSON Decode Fallbacks | High | **Zero (0)** |
+| Avg Survival Rate | ~30.8% | **~33–38%** |
+| JSON Decode Fallbacks | Frequent | **Zero (0)** |
 | Structural Stability | Unstable | **100% Stable** |
 | Training Reward | ~0.30 | **~0.71** |
+| Reward Std Dev | High | **0.035 (stable)** |
 
-> The trained agent achieved **100% JSON structural stability** and a **~2.3× improvement in RL reward** over the untrained baseline, demonstrating clear evidence of policy learning.
+### What the Agent Learned
+1. **Structural Mastery**: Perfect JSON output 100% of the time — zero decode fallbacks
+2. **Zone Prioritization**: Directs resources to highest-severity zones first
+3. **Stable Policy**: Low variance (0.035) = consistent, repeatable strategy
+
+### Key Insight
+The agent's reward spiked primarily from solving the structural problem (perfect JSON). The strategic survival improvement was ~2-7%. This reveals that in strict-protocol environments, **structural compliance dominates the reward landscape** — a genuine RL alignment finding.
 
 ---
 
@@ -69,28 +116,30 @@ And rewards:
 
 ```
 CrisisGridEnv (OpenEnv)
-    ↓
+    ↓ observation (grid state, schema, API status)
 build_prompt(obs) → structured context for LLM
     ↓
 Qwen2-1.5B-Instruct + LoRA adapter (checkpoint-20)
+    ↓ JSON command
+GRPO reward_func → 7-component reward signal
     ↓
-GRPO reward_func(completions, prompts)
-    ↓
-GRPOTrainer (TRL 0.15.x) → policy update
+GRPOTrainer (TRL 0.15.x) → policy gradient update
 ```
 
 ---
 
 ## 🗂️ Repository Structure
 
-- `environment/`: Core simulation (state, schema drift, oversight, adversary)
-- `utils/`: Message validation + visualization helpers
-- `training/`: GRPO reward functions + baseline scripts
-- `notebooks/`: Training run notebook for judges
-- `train.py`: GRPO training script with LoRA resume
-- `evaluate.py`: Evaluation with JSON repair logging
-- `demo.py`: A/B episode dump (random vs trained)
-- `app.py`: Gradio demo (Spaces)
+| Path | Purpose |
+|---|---|
+| `environment/` | Core simulation (state, schema drift, oversight, adversary) |
+| `training/` | GRPO reward functions + baseline scripts |
+| `utils/` | Message validation + visualization helpers |
+| `notebooks/` | Training notebook for judges |
+| `train.py` | GRPO training with LoRA resume |
+| `evaluate.py` | Multi-episode evaluation with JSON repair logging |
+| `demo.py` | A/B episode dump (random vs trained) |
+| `app.py` | Gradio live demo (Spaces) |
 
 ---
 
@@ -101,7 +150,10 @@ git clone https://github.com/Kaviyathamizhan/CrisisGrid_System.git
 cd CrisisGrid_System
 pip install -r requirements.txt
 
-# Evaluate the trained agent
+# Train (~15 min on A100)
+python train.py --checkpoint-path thebosskt/crisisgrid-lora --max-completion-length 600 --episodes 120
+
+# Evaluate
 python evaluate.py --checkpoint-path thebosskt/crisisgrid-lora --episodes 10
 
 # Run A/B demo
@@ -110,13 +162,6 @@ python demo.py --checkpoint-path thebosskt/crisisgrid-lora
 
 ---
 
-## 🔬 Training
+## 🙏 Acknowledgements
 
-```bash
-python train.py \
-  --checkpoint-path thebosskt/crisisgrid-lora \
-  --max-completion-length 600 \
-  --episodes 120
-```
-
-Checkpoints are saved every 20 steps to `checkpoints_a100/`.
+Built with [OpenEnv](https://github.com/openenv-ai/openenv), [Hugging Face TRL](https://github.com/huggingface/trl), [PEFT](https://github.com/huggingface/peft), and [Qwen2](https://huggingface.co/Qwen/Qwen2-1.5B-Instruct).

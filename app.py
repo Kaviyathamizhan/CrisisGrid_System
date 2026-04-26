@@ -1,6 +1,6 @@
 """
 app.py
-Minimal HuggingFace Spaces (Gradio) demo for CrisisGrid.
+HuggingFace Spaces (Gradio) demo for CrisisGrid.
 
 UI:
   - Button: "Run Episode"
@@ -26,7 +26,7 @@ from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
 
-BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct-bnb-4bit"
+BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 
 
 def _extract_json_object(text: str) -> Optional[str]:
@@ -91,56 +91,48 @@ def decode_action(llm_text: str, rng: np.random.RandomState) -> Tuple[Dict[str, 
 
 
 def build_prompt(obs: dict) -> str:
-    try:
-        from training.grpo_train import build_prompt as _bp  # type: ignore
-        return _bp(obs)
-    except Exception:
-        timestep = obs.get("timestep", 0)
-        return (
-            "You are the Command Agent. Output ONLY one valid JSON command.\n"
-            "Required fields: intent, zone, resource, priority. Optional: units.\n"
-            f"Step {timestep}/50\nYour JSON command:"
-        )
+    timestep = obs.get("timestep", 0)
+    api_status = obs.get("api_status", "active")
+    schema_version = obs.get("current_schema_version", 1)
+    last_error = obs.get("last_error", None)
+    grid = obs.get("grid", [])
+
+    worst = []
+    for i, row in enumerate(grid):
+        for j, cell in enumerate(row):
+            sev = float(cell[1]) if len(cell) > 1 else 0.0
+            worst.append((sev, i * 5 + j))
+    worst.sort(reverse=True)
+    top = [z for _, z in worst[:3]]
+
+    prompt = (
+        "You are the Command Agent for CrisisGrid.\n"
+        "Output ONLY one valid JSON command with keys: intent, zone, resource, priority, units.\n"
+        f"Schema={schema_version} API={api_status}\n"
+    )
+    if last_error:
+        prompt += f"LAST ERROR: {last_error}\n"
+    prompt += f"Step={timestep} critical_zones={top}\nYour JSON command:"
+    return prompt
 
 
 def load_model_and_tokenizer(lora_path_or_repo: str):
     import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
 
-    try:
-        from unsloth import FastLanguageModel  # type: ignore
-
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=BASE_MODEL,
-            max_seq_length=2048,
-            load_in_4bit=True,
-            dtype=None,
-        )
-        model = PeftModel.from_pretrained(model, lora_path_or_repo)
-        model.eval()
-        return model, tokenizer
-    except ModuleNotFoundError:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-        bnb_cfg = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL,
-            quantization_config=bnb_cfg,
-            device_map="auto",
-            torch_dtype=torch.float16,
-        )
-        model = PeftModel.from_pretrained(model, lora_path_or_repo)
-        model.eval()
-        return model, tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
+    )
+    model = PeftModel.from_pretrained(model, lora_path_or_repo)
+    model.eval()
+    return model, tokenizer
 
 
-def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 700) -> str:
+def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 600) -> str:
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -150,7 +142,9 @@ def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 700) -> st
         out = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            do_sample=False,
+            do_sample=True,
+            temperature=0.7,
+            top_p=0.9,
         )
     decoded = tokenizer.decode(out[0], skip_special_tokens=True)
     return decoded[len(prompt) :].strip() if decoded.startswith(prompt) else decoded.strip()
@@ -183,7 +177,7 @@ def run_episode() -> Tuple[str, str]:
 
     while not done:
         prompt = build_prompt(obs_cmd)
-        comp = generate_one(_MODEL, _TOKENIZER, prompt, max_new_tokens=700)
+        comp = generate_one(_MODEL, _TOKENIZER, prompt, max_new_tokens=600)
         msg, diag = decode_action(comp, rng)
         if diag.get("json_repair_triggered"):
             repair_logs.append(f"step={obs_cmd.get('timestep', '?')}: json_repair={diag.get('json_repair_reason')}")
@@ -205,10 +199,10 @@ def main():
     import gradio as gr
 
     with gr.Blocks(title="CrisisGrid Demo") as demo:
-        gr.Markdown("## CrisisGrid — Run Episode")
-        gr.Markdown("Click to run one full 50-step episode with the trained Command Agent.")
+        gr.Markdown("## 🏙️ CrisisGrid — Live Disaster Response Demo")
+        gr.Markdown("Click to run one full 50-step episode with the GRPO-trained Command Agent.")
 
-        btn = gr.Button("Run Episode")
+        btn = gr.Button("▶️ Run Episode", variant="primary")
         out_steps = gr.Textbox(label="Step-by-step actions", lines=22)
         out_summary = gr.Textbox(label="Summary", lines=6)
 
@@ -219,4 +213,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
