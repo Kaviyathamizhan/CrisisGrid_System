@@ -156,7 +156,7 @@ _TOKENIZER = None
 
 
 def run_episode() -> Tuple[str, str]:
-    lora_path_or_repo = os.getenv("CRISISGRID_LORA_REPO", "").strip() or os.getenv("CRISISGRID_CHECKPOINT_PATH", "").strip()
+    lora_path_or_repo = os.getenv("CRISISGRID_LORA_REPO", "").strip() or os.getenv("CRISISGRID_CHECKPOINT_PATH", "").strip() or "thebosskt/crisisgrid-lora"
     if not lora_path_or_repo:
         return (
             "Missing LoRA reference.",
