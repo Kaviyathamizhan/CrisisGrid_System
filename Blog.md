@@ -149,9 +149,7 @@ python demo.py --checkpoint-path checkpoints_a100/checkpoint-20
 
 ---
 
-## Links
-
-- **Live Demo Space**: [https://huggingface.co/spaces/thebosskt/crisisgrid-train](https://huggingface.co/spaces/thebosskt/crisisgrid-train)
+- **Live Demo Space**: [https://huggingface.co/spaces/thebosskt/crisisgrid-demo](https://huggingface.co/spaces/thebosskt/crisisgrid-demo)
 - **Trained LoRA Weights**: [https://huggingface.co/thebosskt/crisisgrid-lora](https://huggingface.co/thebosskt/crisisgrid-lora)
-- **Training Notebook**: [training_run.ipynb](./notebooks/training_run.ipynb)
+- **Training Notebook**: [training_run.ipynb](https://huggingface.co/spaces/thebosskt/crisisgrid-demo/blob/main/notebooks/training_run.ipynb)
 - **GitHub Repository**: [https://github.com/Kaviyathamizhan/CrisisGrid_System](https://github.com/Kaviyathamizhan/CrisisGrid_System)

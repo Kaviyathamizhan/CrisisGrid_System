@@ -21,10 +21,10 @@ A Multi-Agent Reinforcement Learning Environment for Disaster Response Coordinat
 
 | Resource | Link |
 |---|---|
-| 🤗 **Live Demo Space** | [huggingface.co/spaces/thebosskt/crisisgrid-train](https://huggingface.co/spaces/thebosskt/crisisgrid-train) |
+| 🤗 **Live Demo Space** | [huggingface.co/spaces/thebosskt/crisisgrid-demo](https://huggingface.co/spaces/thebosskt/crisisgrid-demo) |
 | 🧠 **Trained LoRA Weights** | [huggingface.co/thebosskt/crisisgrid-lora](https://huggingface.co/thebosskt/crisisgrid-lora) |
-| 📓 **Training Notebook** | [training_run.ipynb](./notebooks/training_run.ipynb) |
-| 📝 **Blog Post / Writeup** | [Blog.md](./Blog.md) |
+| 📓 **Training Notebook** | [training_run.ipynb](https://huggingface.co/spaces/thebosskt/crisisgrid-demo/blob/main/notebooks/training_run.ipynb) |
+| 📝 **Blog Post / Writeup** | [Blog.md](https://huggingface.co/spaces/thebosskt/crisisgrid-demo/blob/main/Blog.md) |
 | 📈 **WandB Training Logs** | [wandb.ai/kaviyathamizhan37-/crisisgrid](https://wandb.ai/kaviyathamizhan37-/crisisgrid/workspace?nw=nwuserkaviyathamizhan37) |
 
 ---
