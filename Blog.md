@@ -1,6 +1,6 @@
 # 🏙️ Stabilizing LLM Agents in CrisisGrid with GRPO
 
-> **OpenEnv India Hackathon 2026** — Team Submission
+> **OpenEnv India Hackathon 2026** — Solo Submission
 
 ---
 
@@ -8,7 +8,7 @@
 
 Imagine a real disaster scenario: an earthquake has devastated a city divided into 25 zones. A central Command Agent must coordinate food, medicine, rescue teams, water, and shelter across all zones simultaneously. Every decision must be transmitted as a structured JSON API command to field responders.
 
-We deployed a base `Qwen/Qwen2-1.5B-Instruct` model as the Command Agent. The result? **Catastrophic failure.** The model:
+I deployed a base `Qwen/Qwen2-1.5B-Instruct` model as the Command Agent. The result? **Catastrophic failure.** The model:
 - Hallucinated free-form text instead of valid JSON commands
 - Ignored high-severity zones in favor of random allocations
 - Failed to adapt when the communication API changed mid-crisis (schema drift at step 25)
@@ -41,7 +41,7 @@ The agent must output a single JSON command:
 ```
 
 ### The Reward Signal (7 Components)
-Our reward function is composable, not monolithic:
+My reward function is composable, not monolithic:
 
 | Component | Value | Purpose |
 |---|---|---|
@@ -59,7 +59,7 @@ Plus a **token efficiency penalty** that discourages verbose outputs.
 
 ## Training: GRPO with LoRA
 
-We used **Group Relative Policy Optimization (GRPO)** via Hugging Face TRL to train the agent. GRPO compares groups of completions and updates the policy based on relative performance — no critic network needed.
+I used **Group Relative Policy Optimization (GRPO)** via Hugging Face TRL to train the agent. GRPO compares groups of completions and updates the policy based on relative performance — no critic network needed.
 
 ### Configuration
 - **Base Model**: `Qwen/Qwen2-1.5B-Instruct`
@@ -107,7 +107,7 @@ Key training signal: `decode_fallback=False` was consistently logged from step 1
 
 ## Key Technical Insight
 
-We discovered an interesting RL alignment observation: the agent's internal reward spiked dramatically (from 0.30 to 0.71) primarily because it solved the **structural problem** (perfect JSON formatting). The strategic improvement (survival rate) was more modest (~2-7% gain).
+I discovered an interesting RL alignment observation: the agent's internal reward spiked dramatically (from 0.30 to 0.71) primarily because it solved the **structural problem** (perfect JSON formatting). The strategic improvement (survival rate) was more modest (~2-7% gain).
 
 This reveals that in environments with strict communication protocols, **structural compliance dominates the reward landscape**. The agent prioritized "speak correctly" over "speak wisely" — a classic reward shaping challenge that future work could address by increasing the weight of survival-based reward components.
 

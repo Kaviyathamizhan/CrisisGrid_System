@@ -53,7 +53,7 @@ CrisisGrid is a custom 5×5 grid environment where an AI Command Agent must allo
 
 ## 🏗️ Reward Signal Design (7 Components)
 
-Our reward is composable, informative, and hard to game:
+My reward is composable, informative, and hard to game:
 
 | Component | Value | What it Teaches |
 |---|---|---|
@@ -71,7 +71,7 @@ Plus a **token efficiency penalty** that prevents verbose outputs.
 
 ## 🚀 Training
 
-We used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fine-tune `Qwen/Qwen2-1.5B-Instruct` with a LoRA adapter (rank 16, alpha 32).
+I used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fine-tune `Qwen/Qwen2-1.5B-Instruct` with a LoRA adapter (rank 16, alpha 32).
 
 ### Training Progression
 
