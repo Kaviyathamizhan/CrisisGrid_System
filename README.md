@@ -9,38 +9,114 @@ python_version: "3.10"
 pinned: false
 ---
 
-# CrisisGrid
+# 🏙️ CrisisGrid: Teaching LLMs to Save Cities with GRPO
 
 A Multi-Agent Reinforcement Learning Environment for Disaster Response Coordination.
 
-## Overview
+> **OpenEnv India Hackathon 2026 Submission**
 
-CrisisGrid simulates a 5×5 disaster zone where an AI Command Agent must allocate resources to maximize population survival. The environment includes dynamic severity, strict communication structure, and a deterministic schema drift mid-episode.
+---
 
-## Repository Structure
+## 📌 Quick Links
 
-- `environment/`: Core simulation logic (state, schema drift, oversight, adversary)
-- `utils/`: Message validation + visualization helpers
-- `training/`: GRPO training + baseline scripts
-- `notebooks/`: Colab notebooks
-- `train.py`: GRPO training (Unsloth + TRL) with LoRA resume
-- `evaluate.py`: 50-episode evaluation with JSON repair logging
-- `demo.py`: A/B episode dump (random vs trained) into `data/`
-- `app.py`: Gradio demo (Spaces)
+- 🤗 **Live Demo Space**: [https://huggingface.co/spaces/thebosskt/crisisgrid-train](https://huggingface.co/spaces/thebosskt/crisisgrid-train)
+- 🧠 **Trained LoRA Weights**: [https://huggingface.co/thebosskt/crisisgrid-lora](https://huggingface.co/thebosskt/crisisgrid-lora)
+- 📓 **Training Notebook**: [training_run.ipynb](./notebooks/training_run.ipynb)
+- 📝 **Blog Post / Writeup**: [blog_post.md](./blog_post.md)
 
-## Training (A100 / Spaces)
+---
 
-Set your LoRA adapter reference via env var:
+## 🎯 Problem Statement
 
-- `CRISISGRID_CHECKPOINT_PATH`: local adapter directory **or** HF repo id (downloaded via `snapshot_download`)
+In real-world disaster scenarios, central command agents must coordinate resources across many zones simultaneously. The challenge: existing LLMs are structurally unstable when forced to output strict JSON API commands under dynamic, adversarial conditions.
 
-Then run:
+**CrisisGrid** is a custom 5×5 grid environment where an AI Command Agent must allocate resources (food, medicine, rescue, water, shelter) to 25 disaster zones to maximize population survival. The environment includes:
+- Dynamic severity escalation
+- Mid-episode schema drift (API changes at step 25)
+- Adversary agents that destabilize zones
+- Strict JSON communication protocol
 
-```bash
-python train.py --checkpoint-path "$CRISISGRID_CHECKPOINT_PATH"
+---
+
+## 🚀 What We Trained
+
+We used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fine-tune a `Qwen/Qwen2-1.5B-Instruct` model with a LoRA adapter.
+
+The reward function penalizes:
+- ❌ Invalid JSON output (decode fallback penalty)
+- ❌ Misallocating resources to low-severity zones
+
+And rewards:
+- ✅ Valid structured JSON every step
+- ✅ Targeting highest-severity zones
+
+---
+
+## 📊 Results
+
+| Metric | Baseline (Random) | GRPO Trained Agent |
+|---|---|---|
+| Avg Survival Rate | ~30.8% | ~33–38% |
+| JSON Decode Fallbacks | High | **Zero (0)** |
+| Structural Stability | Unstable | **100% Stable** |
+| Training Reward | ~0.30 | **~0.71** |
+
+> The trained agent achieved **100% JSON structural stability** and a **~2.3× improvement in RL reward** over the untrained baseline, demonstrating clear evidence of policy learning.
+
+---
+
+## 🏗️ Architecture
+
+```
+CrisisGridEnv (OpenEnv)
+    ↓
+build_prompt(obs) → structured context for LLM
+    ↓
+Qwen2-1.5B-Instruct + LoRA adapter (checkpoint-20)
+    ↓
+GRPO reward_func(completions, prompts)
+    ↓
+GRPOTrainer (TRL 0.15.x) → policy update
 ```
 
-## HuggingFace Links
+---
 
-- **Demo Space**: (add your Space URL)
-- **Trained LoRA Weights**: (add your model repo URL)
+## 🗂️ Repository Structure
+
+- `environment/`: Core simulation (state, schema drift, oversight, adversary)
+- `utils/`: Message validation + visualization helpers
+- `training/`: GRPO reward functions + baseline scripts
+- `notebooks/`: Training run notebook for judges
+- `train.py`: GRPO training script with LoRA resume
+- `evaluate.py`: Evaluation with JSON repair logging
+- `demo.py`: A/B episode dump (random vs trained)
+- `app.py`: Gradio demo (Spaces)
+
+---
+
+## ▶️ Quickstart
+
+```bash
+git clone https://github.com/Kaviyathamizhan/CrisisGrid_System.git
+cd CrisisGrid_System
+pip install -r requirements.txt
+
+# Evaluate the trained agent
+python evaluate.py --checkpoint-path thebosskt/crisisgrid-lora --episodes 10
+
+# Run A/B demo
+python demo.py --checkpoint-path thebosskt/crisisgrid-lora
+```
+
+---
+
+## 🔬 Training
+
+```bash
+python train.py \
+  --checkpoint-path thebosskt/crisisgrid-lora \
+  --max-completion-length 600 \
+  --episodes 120
+```
+
+Checkpoints are saved every 20 steps to `checkpoints_a100/`.
