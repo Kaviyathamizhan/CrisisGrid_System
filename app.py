@@ -120,6 +120,8 @@ def load_model_and_tokenizer(lora_path_or_repo: str):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
+    from huggingface_hub import snapshot_download
+    import json
 
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     model = AutoModelForCausalLM.from_pretrained(
@@ -127,7 +129,26 @@ def load_model_and_tokenizer(lora_path_or_repo: str):
         torch_dtype="auto",
         device_map="auto"
     )
-    model = PeftModel.from_pretrained(model, lora_path_or_repo)
+
+    # Sanitize Unsloth keys from adapter_config.json
+    local_dir = snapshot_download(lora_path_or_repo)
+    config_path = os.path.join(local_dir, "adapter_config.json")
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            cfg_dict = json.load(f)
+        
+        keys_to_remove = ["alora_invocation_tokens", "unsloth_version"]
+        changed = False
+        for k in keys_to_remove:
+            if k in cfg_dict:
+                del cfg_dict[k]
+                changed = True
+                
+        if changed:
+            with open(config_path, "w") as f:
+                json.dump(cfg_dict, f)
+
+    model = PeftModel.from_pretrained(model, local_dir)
     model.eval()
     return model, tokenizer
 
