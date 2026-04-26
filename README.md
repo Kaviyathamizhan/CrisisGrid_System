@@ -88,10 +88,10 @@ We used **GRPO (Group Relative Policy Optimization)** via Hugging Face TRL to fi
 
 ### Training Plots
 
-![Reward Curves](./assets/reward_curves.png)
+![Reward Curves](https://raw.githubusercontent.com/Kaviyathamizhan/CrisisGrid_System/main/assets/reward_curves.png)
 *GRPO reward, loss, and KL divergence over training steps. Reward peaks at 0.711 (step 20).*
 
-![Training Charts](./assets/training_charts.png)
+![Training Charts](https://raw.githubusercontent.com/Kaviyathamizhan/CrisisGrid_System/main/assets/training_charts.png)
 *Survival rate, decode fallback, and JSON repair metrics. Fallback drops to zero at step 20.*
 
 > 📈 **Live WandB Dashboard**: [View all training metrics here](https://wandb.ai/kaviyathamizhan37-/crisisgrid/workspace?nw=nwuserkaviyathamizhan37)
