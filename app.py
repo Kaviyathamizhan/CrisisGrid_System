@@ -130,23 +130,27 @@ def load_model_and_tokenizer(lora_path_or_repo: str):
         device_map="auto"
     )
 
-    # Sanitize Unsloth keys from adapter_config.json
+    # Sanitize ALL unknown keys from adapter_config.json
+    # Unsloth injects proprietary fields that crash standard PEFT
     local_dir = snapshot_download(lora_path_or_repo)
     config_path = os.path.join(local_dir, "adapter_config.json")
     if os.path.exists(config_path):
+        from peft import LoraConfig
+        import inspect
+        valid_keys = set(inspect.signature(LoraConfig.__init__).parameters.keys())
+        valid_keys.discard("self")
+        # Also keep peft_type and other meta fields
+        valid_keys.update(["peft_type", "auto_mapping", "base_model_name_or_path", 
+                           "task_type", "inference_mode", "revision"])
+
         with open(config_path, "r") as f:
             cfg_dict = json.load(f)
-        
-        keys_to_remove = ["alora_invocation_tokens", "unsloth_version"]
-        changed = False
-        for k in keys_to_remove:
-            if k in cfg_dict:
-                del cfg_dict[k]
-                changed = True
-                
-        if changed:
+
+        cleaned = {k: v for k, v in cfg_dict.items() if k in valid_keys}
+
+        if len(cleaned) != len(cfg_dict):
             with open(config_path, "w") as f:
-                json.dump(cfg_dict, f)
+                json.dump(cleaned, f)
 
     model = PeftModel.from_pretrained(model, local_dir)
     model.eval()
