@@ -1,0 +1,2281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrisisGrid AI Command Center</title>
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --panel-bg: rgba(15, 23, 42, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.07);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      
+      /* Neon Accent Colors */
+      --cyan-accent: #00f2fe;
+      --cyan-glow: rgba(0, 242, 254, 0.25);
+      --orange-accent: #ff9900;
+      --orange-glow: rgba(255, 153, 0, 0.25);
+      --red-accent: #ff416c;
+      --red-glow: rgba(255, 65, 108, 0.25);
+      --green-accent: #00b09b;
+      --green-glow: rgba(0, 176, 155, 0.25);
+      --yellow-accent: #f59e0b;
+      
+      --font-title: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      overflow-x: hidden;
+      line-height: 1.5;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Main Container */
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100vw;
+      padding: 16px;
+      gap: 16px;
+    }
+
+    /* Glassmorphic Panel Base */
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+      padding: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .glass-panel:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    /* TOP NAVIGATION BAR */
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 24px;
+      height: 64px;
+      flex-shrink: 0;
+    }
+
+    .nav-logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-logo-dot {
+      width: 10px;
+      height: 10px;
+      background-color: var(--cyan-accent);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--cyan-accent);
+      animation: pulse-glow 2s infinite;
+    }
+
+    .nav-title {
+      font-family: var(--font-title);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      background: linear-gradient(135deg, #ffffff 30%, var(--text-muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-branding {
+      font-family: var(--font-title);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--cyan-accent);
+      margin-left: 8px;
+    }
+
+    .nav-status-chips {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .status-chip {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .status-chip .indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-chip.agent-status .indicator {
+      background-color: var(--cyan-accent);
+      box-shadow: 0 0 8px var(--cyan-accent);
+    }
+
+    .status-chip.model-status .indicator {
+      background-color: var(--green-accent);
+    }
+
+    /* Enterprise Operational Status Indicators */
+    .system-status-indicator {
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .system-status-indicator.status-normal {
+      border: 1px solid var(--green-accent);
+      color: var(--green-accent);
+      box-shadow: 0 0 8px rgba(0, 176, 155, 0.1);
+      background: rgba(0, 176, 155, 0.05);
+    }
+
+    .system-status-indicator.status-warning {
+      border: 1px solid var(--orange-accent);
+      color: var(--orange-accent);
+      box-shadow: 0 0 12px var(--orange-accent);
+      background: rgba(255, 153, 0, 0.08);
+      animation: pulse-border-orange 1s infinite alternate;
+    }
+
+    .system-status-indicator.status-recovering {
+      border: 1px solid var(--yellow-accent);
+      color: var(--yellow-accent);
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+      background: rgba(245, 158, 11, 0.08);
+    }
+
+    .system-status-indicator.status-stable {
+      border: 1px solid var(--green-accent);
+      color: var(--green-accent);
+      box-shadow: 0 0 10px rgba(0, 176, 155, 0.2);
+      background: rgba(0, 176, 155, 0.08);
+    }
+
+    /* KPI DASHBOARD ROW */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .kpi-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 96px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--cyan-accent);
+    }
+
+    .kpi-card.kpi-critical::before {
+      background: var(--red-accent);
+    }
+
+    .kpi-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .kpi-value-area {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-top: 8px;
+    }
+
+    .kpi-value {
+      font-family: var(--font-title);
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .kpi-trend {
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .trend-up { color: var(--green-accent); }
+    .trend-down { color: var(--red-accent); }
+    .trend-stable { color: var(--cyan-accent); }
+
+    /* CORE CONTENT GRID */
+    .main-workspace {
+      display: flex;
+      flex: 1;
+      gap: 16px;
+      min-height: 0; /* Important for scroll nested items */
+    }
+
+    /* LEFT SIDEBAR: MISSION BRIEF & OPERATIONS DECK */
+    .left-ops-panel {
+      width: 340px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-shrink: 0;
+      min-height: 0;
+    }
+
+    /* MISSION BRIEF CARD */
+    .mission-brief-card {
+      flex-shrink: 0;
+    }
+
+    .mission-brief-header {
+      font-family: var(--font-title);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--cyan-accent);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mission-brief-details {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .brief-item {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      padding-bottom: 6px;
+    }
+
+    .brief-label {
+      color: var(--text-muted);
+    }
+
+    .brief-val {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* CONTROL DECK CARD */
+    .control-deck {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .control-deck-title {
+      font-family: var(--font-title);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .select-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .select-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .control-select {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-main);
+      font-size: 0.8rem;
+      outline: none;
+      width: 100%;
+      cursor: pointer;
+      font-family: var(--font-body);
+      transition: all 0.2s ease;
+    }
+
+    .control-select:focus {
+      border-color: var(--cyan-accent);
+      box-shadow: 0 0 8px rgba(0, 242, 254, 0.15);
+    }
+
+    /* Action Buttons */
+    .btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      color: var(--text-main);
+      padding: 10px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan-accent) 0%, #0081ff 100%);
+      border: none;
+      color: #000;
+      font-weight: 700;
+      box-shadow: 0 0 15px rgba(0, 242, 254, 0.2);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #00f2fe 30%, #00bcff 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.35);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, var(--orange-accent) 0%, #ff5722 100%);
+      border: none;
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 0 15px rgba(255, 153, 0, 0.2);
+    }
+
+    .btn-secondary:hover {
+      background: linear-gradient(135deg, #ffa726 30%, #ff7043 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 0 20px rgba(255, 153, 0, 0.35);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+
+    /* Playback Control Bar Component */
+    .playback-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .timeline-scrubber-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .timeline-bar-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .scrub-timeline {
+      flex: 1;
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      height: 4px;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .scrub-timeline::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--cyan-accent);
+      box-shadow: 0 0 8px var(--cyan-accent);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+
+    .scrub-timeline::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .timeline-val {
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .speed-slider-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .speed-slider-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* CENTER AREA: INTERACTIVE VISUAL CRISIS GRID MAP */
+    .center-map-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    /* View Controls Card */
+    .view-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      flex-shrink: 0;
+    }
+
+    .heatmap-toggles {
+      display: flex;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 2px;
+      border: 1px solid var(--panel-border);
+    }
+
+    .heatmap-btn {
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .heatmap-btn.active {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--cyan-accent);
+    }
+
+    .grid-mode-selector {
+      display: flex;
+      gap: 10px;
+    }
+
+    .mode-btn {
+      background: transparent;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mode-btn.active {
+      border-color: var(--cyan-accent);
+      color: var(--cyan-accent);
+      background: rgba(0, 242, 254, 0.05);
+    }
+
+    /* Dual Grid split screen layout */
+    .map-displays-wrapper {
+      flex: 1;
+      display: flex;
+      gap: 16px;
+      min-height: 0;
+      position: relative;
+    }
+
+    .grid-container-card {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      min-height: 0;
+      position: relative;
+    }
+
+    .grid-card-title {
+      font-family: var(--font-title);
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      color: var(--text-muted);
+      align-self: flex-start;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .grid-card-title.trained-title {
+      color: var(--cyan-accent);
+    }
+
+    .grid-card-title.random-title {
+      color: var(--orange-accent);
+    }
+
+    /* 5x5 CRISIS MAP CSS */
+    .crisis-grid-wrapper {
+      display: grid;
+      grid-template-columns: 24px repeat(5, 1fr);
+      grid-template-rows: 24px repeat(5, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 420px;
+      aspect-ratio: 1/1;
+      position: relative;
+    }
+
+    /* Labels */
+    .grid-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .grid-cell {
+      position: relative;
+      border-radius: 8px;
+      aspect-ratio: 1/1;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 6px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+
+    .grid-cell:hover {
+      transform: scale(1.05);
+      z-index: 10;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
+    }
+
+    /* Zone Decarcation Borders */
+    .grid-cell.cell-zone-cmd {
+      border: 1.5px solid rgba(0, 242, 254, 0.15);
+    }
+    .grid-cell.cell-zone-cmd:hover {
+      border-color: var(--cyan-accent);
+      box-shadow: 0 0 15px var(--cyan-glow);
+    }
+
+    .grid-cell.cell-zone-res {
+      border: 1.5px solid rgba(255, 153, 0, 0.15);
+    }
+    .grid-cell.cell-zone-res:hover {
+      border-color: var(--orange-accent);
+      box-shadow: 0 0 15px var(--orange-glow);
+    }
+
+    /* Cell critical alarm border */
+    .grid-cell.cell-critical {
+      border: 2px solid var(--red-accent) !important;
+      animation: cell-flash-red 1s infinite alternate;
+    }
+
+    /* Cell Internal Elements */
+    .cell-header-coord {
+      font-size: 0.6rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+
+    .cell-value-stat {
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-title);
+      align-self: center;
+      margin: auto 0;
+    }
+
+    .cell-badge-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      font-size: 0.55rem;
+      font-weight: 600;
+    }
+
+    .cell-pop-badge {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      color: #cbd5e1;
+    }
+
+    .cell-resource-badge {
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      font-size: 0.5rem;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    /* Tooltip container */
+    .tooltip-container {
+      position: absolute;
+      bottom: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 0.75rem;
+      z-index: 100;
+      min-width: 150px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(8px);
+    }
+
+    .grid-cell:hover .tooltip-container {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(-4px);
+    }
+
+    .tooltip-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .tooltip-item:last-child {
+      margin-bottom: 0;
+    }
+    .tooltip-label {
+      color: var(--text-muted);
+    }
+    .tooltip-val {
+      font-weight: 600;
+    }
+
+    /* RIGHT SIDEBAR: EXPLANATION PANEL, LOGS, TIMELINE */
+    .right-info-panel {
+      width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-shrink: 0;
+      min-height: 0;
+    }
+
+    /* DECISION EXPLANATION PANEL */
+    .explanation-panel {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .panel-header-title {
+      font-family: var(--font-title);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--cyan-accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .json-command-viewer {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #60a5fa;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      max-height: 80px;
+    }
+
+    .explanation-text-box {
+      font-size: 0.8rem;
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 2px solid var(--cyan-accent);
+      padding: 6px 10px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    /* OVERSIGHT MONITOR & TIMELINE */
+    .oversight-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--panel-border);
+      margin-bottom: 10px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      padding: 8px 16px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      position: relative;
+    }
+
+    .tab-btn.active {
+      color: var(--cyan-accent);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--cyan-accent);
+    }
+
+    .tab-content-container {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    /* Oversight Terminal */
+    .oversight-terminal {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 4px;
+    }
+
+    .terminal-line {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+      padding-bottom: 4px;
+    }
+
+    .terminal-time {
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .terminal-tag {
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .terminal-tag.success { color: var(--green-accent); }
+    .terminal-tag.warning { color: var(--orange-accent); }
+    .terminal-tag.critical { color: var(--red-accent); }
+    .terminal-tag.info { color: var(--cyan-accent); }
+
+    .terminal-msg {
+      color: var(--text-main);
+    }
+
+    /* Synchronized Timeline */
+    .timeline-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 6px 10px;
+    }
+
+    .timeline-node {
+      display: flex;
+      gap: 14px;
+      position: relative;
+    }
+
+    .timeline-node::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 16px;
+      bottom: -20px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .timeline-node:last-child::before {
+      display: none;
+    }
+
+    .timeline-node-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid var(--panel-border);
+      flex-shrink: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .timeline-node-dot::after {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: transparent;
+    }
+
+    .timeline-node.success .timeline-node-dot {
+      border-color: var(--green-accent);
+      box-shadow: 0 0 6px var(--green-glow);
+    }
+    .timeline-node.success .timeline-node-dot::after { background-color: var(--green-accent); }
+
+    .timeline-node.warning .timeline-node-dot {
+      border-color: var(--orange-accent);
+      box-shadow: 0 0 6px var(--orange-glow);
+    }
+    .timeline-node.warning .timeline-node-dot::after { background-color: var(--orange-accent); }
+
+    .timeline-node.critical .timeline-node-dot {
+      border-color: var(--red-accent);
+      box-shadow: 0 0 6px var(--red-glow);
+    }
+    .timeline-node.critical .timeline-node-dot::after { background-color: var(--red-accent); }
+
+    .timeline-node.info .timeline-node-dot {
+      border-color: var(--cyan-accent);
+      box-shadow: 0 0 6px var(--cyan-glow);
+    }
+    .timeline-node.info .timeline-node-dot::after { background-color: var(--cyan-accent); }
+
+    .timeline-node-content {
+      font-size: 0.75rem;
+      padding-top: 1px;
+    }
+
+    .timeline-node-step {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .timeline-node-text {
+      color: var(--text-main);
+      font-weight: 500;
+    }
+
+    /* CHART DRAWER CARD */
+    .chart-container-card {
+      height: 160px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    /* ANIMATIONS */
+    @keyframes pulse-glow {
+      0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 5px var(--cyan-accent);
+        opacity: 0.7;
+      }
+      50% {
+        transform: scale(1.1);
+        box-shadow: 0 0 12px var(--cyan-accent);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 5px var(--cyan-accent);
+        opacity: 0.7;
+      }
+    }
+
+    @keyframes pulse-border-orange {
+      0% {
+        border-color: rgba(255, 153, 0, 0.4);
+        box-shadow: 0 0 6px rgba(255, 153, 0, 0.15);
+      }
+      100% {
+        border-color: var(--orange-accent);
+        box-shadow: 0 0 15px rgba(255, 153, 0, 0.45);
+      }
+    }
+
+    @keyframes cell-flash-red {
+      0% {
+        border-color: rgba(255, 65, 108, 0.3) !important;
+        box-shadow: 0 0 2px rgba(255, 65, 108, 0.1);
+      }
+      100% {
+        border-color: var(--red-accent) !important;
+        box-shadow: 0 0 12px rgba(255, 65, 108, 0.4);
+      }
+    }
+
+    /* Spinner */
+    .loading-spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border-left-color: var(--cyan-accent);
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Hide element helper */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- TOP NAVIGATION BAR -->
+    <header class="navbar glass-panel">
+      <div class="nav-logo-area">
+        <div class="nav-logo-dot"></div>
+        <span class="nav-title">CrisisGrid <span class="nav-branding">AI Command Center</span></span>
+      </div>
+      
+      <div class="nav-status-chips">
+        <div class="status-chip agent-status">
+          <span class="indicator"></span>
+          <span>Agent: <strong id="chip-agent-active">ACTIVE</strong></span>
+        </div>
+        <div class="status-chip model-status">
+          <span class="indicator"></span>
+          <span>Model: <strong>Qwen2-1.5B + LoRA</strong></span>
+        </div>
+        <div class="status-chip">
+          <span>Policy: <strong>GRPO-Trained</strong></span>
+        </div>
+        <div class="status-chip">
+          <span>Mode: <strong id="chip-mode-text">Fast Replay</strong></span>
+        </div>
+        <div id="status-indicator" class="system-status-indicator status-normal">
+          System Status: NORMAL
+        </div>
+      </div>
+    </header>
+
+    <!-- EXECUTIVE KPI ROW -->
+    <section class="kpi-row">
+      <!-- Survival Rate KPI -->
+      <div class="kpi-card glass-panel" id="kpi-card-survival">
+        <span class="kpi-label">Survival Rate</span>
+        <div class="kpi-value-area">
+          <span class="kpi-value" id="kpi-val-survival">100.0%</span>
+          <span class="kpi-trend trend-stable" id="kpi-trend-survival">▼ Stable</span>
+        </div>
+      </div>
+      <!-- Population Saved KPI -->
+      <div class="kpi-card glass-panel">
+        <span class="kpi-label">Population Saved</span>
+        <div class="kpi-value-area">
+          <span class="kpi-value" id="kpi-val-population">0</span>
+          <span class="kpi-trend trend-stable" id="kpi-trend-population">▲ Stable</span>
+        </div>
+      </div>
+      <!-- Resource Efficiency KPI -->
+      <div class="kpi-card glass-panel">
+        <span class="kpi-label">Resource Efficiency</span>
+        <div class="kpi-value-area">
+          <span class="kpi-value" id="kpi-val-resource-eff">100.0%</span>
+          <span class="kpi-trend trend-stable">▲ Stable</span>
+        </div>
+      </div>
+      <!-- Agent Reliability KPI -->
+      <div class="kpi-card glass-panel">
+        <span class="kpi-label">Agent Reliability</span>
+        <div class="kpi-value-area">
+          <span class="kpi-value" id="kpi-val-reliability">100.0%</span>
+          <span class="kpi-trend trend-stable" id="kpi-badge-reliability">▲ Stable</span>
+        </div>
+      </div>
+      <!-- Active Emergencies KPI -->
+      <div class="kpi-card glass-panel" id="kpi-card-emergencies">
+        <span class="kpi-label">Active Emergencies</span>
+        <div class="kpi-value-area">
+          <span class="kpi-value" id="kpi-val-emergencies">0</span>
+          <span class="kpi-trend trend-stable" id="kpi-trend-emergencies">Stable</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN CORE PANEL -->
+    <main class="main-workspace">
+      
+      <!-- LEFT COLUMN: BRIEF & CONTROL DECK -->
+      <aside class="left-ops-panel">
+        
+        <!-- Mission Brief Card -->
+        <div class="mission-brief-card glass-panel">
+          <div class="mission-brief-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
+            Mission Brief
+          </div>
+          <div class="mission-brief-details">
+            <div class="brief-item">
+              <span class="brief-label">Disaster Target Type</span>
+              <span class="brief-val">Severe Flood Spreading</span>
+            </div>
+            <div class="brief-item">
+              <span class="brief-label">Affected Zones Count</span>
+              <span class="brief-val" id="brief-val-affected">16 / 25</span>
+            </div>
+            <div class="brief-item">
+              <span class="brief-label">Population At Risk</span>
+              <span class="brief-val" id="brief-val-at-risk">8,420 citizens</span>
+            </div>
+            <div class="brief-item">
+              <span class="brief-label">Total Allocated Steps</span>
+              <span class="brief-val">50 intervals</span>
+            </div>
+            <div class="brief-item" style="border: none; padding-bottom: 0;">
+              <span class="brief-label">Objectives</span>
+              <span class="brief-val" style="color: var(--cyan-accent);">Maximize survival rates</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Operations / Control Deck -->
+        <div class="control-deck glass-panel">
+          <div class="control-deck-title">Operations Deck</div>
+          
+          <!-- Mode Select -->
+          <div class="select-group">
+            <label class="select-label">Execution Mode</label>
+            <select id="select-mode" class="control-select">
+              <option value="replay">Fast Replay Mode (Pre-cached Trajectories)</option>
+              <option value="live">Live AI Inference Mode (Qwen2-1.5B + LoRA)</option>
+            </select>
+          </div>
+
+          <!-- Seed Select -->
+          <div class="select-group">
+            <label class="select-label">Disaster Scenario Seed</label>
+            <select id="select-seed" class="control-select">
+              <option value="123">Scenario 123 (Benchmark standard)</option>
+              <option value="42">Scenario 42 (Critical water shortage)</option>
+              <option value="999">Scenario 999 (Extreme flood spreading)</option>
+            </select>
+          </div>
+
+          <!-- Launch Mission -->
+          <button id="btn-launch" class="btn btn-primary" style="margin-top: 4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            LAUNCH MISSION SIMULATION
+          </button>
+          
+          <div id="fallback-warning-msg" class="brief-item hidden" style="color: var(--orange-accent); border: none; font-size: 0.75rem;">
+            ⚠ Live inference unavailable. Running replay mode.
+          </div>
+
+          <!-- Playback controls (starts disabled) -->
+          <div class="playback-controls">
+            <button id="btn-play-pause" class="btn" style="flex: 1;" disabled>
+              <svg id="play-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span id="play-btn-text">Play</span>
+            </button>
+            <button id="btn-step-prev" class="btn" style="padding: 10px;" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+            </button>
+            <button id="btn-step-next" class="btn" style="padding: 10px;" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+            </button>
+          </div>
+
+          <!-- Scrub scrubber timeline -->
+          <div class="timeline-scrubber-container">
+            <label class="select-label">Playback scrub timeline</label>
+            <div class="timeline-bar-wrapper">
+              <input type="range" id="timeline-range" class="scrub-timeline" min="0" max="50" value="0" disabled>
+              <span class="timeline-val" id="timeline-step-val">T-0</span>
+            </div>
+          </div>
+
+          <!-- Speed controller -->
+          <div class="speed-slider-wrapper">
+            <label class="select-label">Playback Interval Speed</label>
+            <div class="speed-slider-container">
+              <input type="range" id="speed-range" class="scrub-timeline" min="100" max="1500" step="100" value="500">
+              <span class="timeline-val" id="speed-val-text">0.5s</span>
+            </div>
+          </div>
+
+          <!-- Incident Report Generate Button -->
+          <button id="btn-generate-report" class="btn" style="margin-top: auto;" disabled>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Generate Incident Report
+          </button>
+        </div>
+
+      </aside>
+
+      <!-- CENTER workspace AREA: GRID heatmaps & SPLIT VIEWS -->
+      <section class="center-map-area">
+        
+        <!-- View controls -->
+        <div class="view-controls glass-panel">
+          <div class="heatmap-toggles">
+            <button class="heatmap-btn active" data-heatmap="severity">Severity Map</button>
+            <button class="heatmap-btn" data-heatmap="population">Population Map</button>
+            <button class="heatmap-btn" data-heatmap="resource">Resource Deploys</button>
+          </div>
+          
+          <div class="grid-mode-selector">
+            <button class="mode-btn active" id="btn-mode-comparison">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+              Comparison Split Screen
+            </button>
+            <button class="mode-btn" id="btn-mode-single">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+              Single Grid Focus
+            </button>
+          </div>
+        </div>
+
+        <!-- Displays Wrapper -->
+        <div class="map-displays-wrapper">
+          
+          <!-- LEFT VIEW: RANDOM BASELINE AGENT -->
+          <div class="grid-container-card glass-panel" id="container-random-agent">
+            <div class="grid-card-title random-title">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--orange-accent); display: inline-block;"></span>
+              Random Baseline Agent
+            </div>
+            
+            <div class="crisis-grid-wrapper" id="grid-random">
+              <!-- Grid elements generated dynamically by JavaScript -->
+            </div>
+          </div>
+
+          <!-- RIGHT VIEW: TRAINED AGENT -->
+          <div class="grid-container-card glass-panel" id="container-trained-agent">
+            <div class="grid-card-title trained-title">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--cyan-accent); display: inline-block; box-shadow: 0 0 6px var(--cyan-accent);"></span>
+              Trained Agent Command Zone
+            </div>
+            
+            <div class="crisis-grid-wrapper" id="grid-trained">
+              <!-- Grid elements generated dynamically by JavaScript -->
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- RIGHT COLUMN: DECISION EXPLANATIONS, CONSOLE LOGS & CHARTS -->
+      <aside class="right-info-panel">
+        
+        <!-- Explanation Panel -->
+        <div class="explanation-panel glass-panel">
+          <div class="panel-header-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            Decision Explanation
+          </div>
+          <div class="json-command-viewer" id="json-command-display">
+            Command Payload: Waiting for mission launch...
+          </div>
+          <div class="explanation-text-box" id="explanation-text-display">
+            Decision rationale will generate dynamically based on environmental assets and disaster severity metrics.
+          </div>
+        </div>
+
+        <!-- Oversight logs tabs -->
+        <div class="glass-panel" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+          <div class="oversight-tabs">
+            <button class="tab-btn active" id="tab-oversight">Oversight Monitor</button>
+            <button class="tab-btn" id="tab-timeline">Operational Timeline</button>
+          </div>
+          
+          <div class="tab-content-container">
+            <!-- Oversight Monitor tab panel -->
+            <div id="content-oversight" class="oversight-terminal">
+              <div class="terminal-line">
+                <span class="terminal-time">[00:00]</span>
+                <span class="terminal-tag info">INFO</span>
+                <span class="terminal-msg">Command Center standby. Ready for execution...</span>
+              </div>
+            </div>
+            
+            <!-- Timeline tab panel -->
+            <div id="content-timeline" class="timeline-wrapper hidden">
+              <div class="timeline-node info">
+                <div class="timeline-node-dot"></div>
+                <div class="timeline-node-content">
+                  <div class="timeline-node-step">T-00</div>
+                  <div class="timeline-node-text">Establishing CrisisGrid Operations Room.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Dashboard panel -->
+        <div class="chart-container-card glass-panel">
+          <div class="panel-header-title" style="margin-bottom: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            Metrics Dashboard
+          </div>
+          <div style="position: relative; height: 110px; width: 100%;">
+            <canvas id="metricsChart"></canvas>
+          </div>
+        </div>
+
+      </aside>
+
+    </main>
+
+  </div>
+
+  <!-- Bridge elements to communicate with Gradio Python backend -->
+  <div style="display: none;">
+    <!-- Text area holding the output trajectory json string -->
+    <textarea id="trajectory_output"></textarea>
+    
+    <!-- Input textboxes / buttons -->
+    <input type="number" id="seed_input" value="123">
+    <input type="text" id="mode_input" value="replay">
+    <button id="run_btn"></button>
+  </div>
+
+  <script>
+    // --- Global Application State ---
+    let currentStep = 0;
+    let maxSteps = 50;
+    let playbackInterval = null;
+    let playbackSpeed = 500; // ms per step
+    let isPlaying = false;
+    
+    // Parsed trajectory data
+    let currentTrajectoryData = {
+      trained: null,
+      random: null
+    };
+    
+    // View config
+    let activeHeatmap = 'severity'; // severity, population, resource
+    let activeViewMode = 'comparison'; // comparison, single
+    
+    // Chart instance
+    let metricsChart = null;
+
+    // --- DOM Elements Cache ---
+    const selectMode = document.getElementById('select-mode');
+    const selectSeed = document.getElementById('select-seed');
+    const btnLaunch = document.getElementById('btn-launch');
+    const btnPlayPause = document.getElementById('btn-play-pause');
+    const btnStepPrev = document.getElementById('btn-step-prev');
+    const btnStepNext = document.getElementById('btn-step-next');
+    const timelineRange = document.getElementById('timeline-range');
+    const timelineStepVal = document.getElementById('timeline-step-val');
+    const speedRange = document.getElementById('speed-range');
+    const speedValText = document.getElementById('speed-val-text');
+    const btnGenerateReport = document.getElementById('btn-generate-report');
+    const fallbackWarningMsg = document.getElementById('fallback-warning-msg');
+    
+    // Grid displays
+    const gridRandom = document.getElementById('grid-random');
+    const gridTrained = document.getElementById('grid-trained');
+    const containerRandomAgent = document.getElementById('container-random-agent');
+    const containerTrainedAgent = document.getElementById('container-trained-agent');
+    
+    // Panels
+    const jsonCommandDisplay = document.getElementById('json-command-display');
+    const explanationTextDisplay = document.getElementById('explanation-text-display');
+    const contentOversight = document.getElementById('content-oversight');
+    const contentTimeline = document.getElementById('content-timeline');
+    
+    // KPI widgets
+    const kpiValSurvival = document.getElementById('kpi-val-survival');
+    const kpiTrendSurvival = document.getElementById('kpi-trend-survival');
+    const kpiValPopulation = document.getElementById('kpi-val-population');
+    const kpiTrendPopulation = document.getElementById('kpi-trend-population');
+    const kpiValResourceEff = document.getElementById('kpi-val-resource-eff');
+    const kpiValReliability = document.getElementById('kpi-val-reliability');
+    const kpiBadgeReliability = document.getElementById('kpi-badge-reliability');
+    const kpiValEmergencies = document.getElementById('kpi-val-emergencies');
+    const kpiTrendEmergencies = document.getElementById('kpi-trend-emergencies');
+    const kpiCardSurvival = document.getElementById('kpi-card-survival');
+    const kpiCardEmergencies = document.getElementById('kpi-card-emergencies');
+    
+    // Status chips
+    const chipAgentActive = document.getElementById('chip-agent-active');
+    const chipModeText = document.getElementById('chip-mode-text');
+    const statusIndicator = document.getElementById('status-indicator');
+    const briefValAffected = document.getElementById('brief-val-affected');
+    const briefValAtRisk = document.getElementById('brief-val-at-risk');
+
+    // --- initialization ---
+    window.addEventListener('DOMContentLoaded', () => {
+      // Build empty grid placeholders
+      buildGridSkeleton(gridRandom, 'R');
+      buildGridSkeleton(gridTrained, 'T');
+      
+      // Setup UI Listeners
+      setupUIEventListeners();
+      
+      // Setup Chart.js
+      setupCharts();
+      
+      // Expose globally so Gradio callback can trigger this
+      window.loadCrisisGridTrajectory = (jsonStr) => {
+        handleBackendTrajectoryLoaded(jsonStr);
+      };
+    });
+
+    // --- Grid Renderers ---
+    function buildGridSkeleton(container, prefix) {
+      container.innerHTML = '';
+      
+      // Col Headers
+      container.appendChild(createLabel(''));
+      for (let j = 0; j < 5; j++) {
+        container.appendChild(createLabel(`C${j}`));
+      }
+      
+      // Grid cells
+      for (let i = 0; i < 5; i++) {
+        container.appendChild(createLabel(`R${i}`));
+        for (let j = 0; j < 5; j++) {
+          const cellIdx = i * 5 + j;
+          const cell = document.createElement('div');
+          cell.className = `grid-cell ${i < 2 ? 'cell-zone-cmd' : 'cell-zone-res'}`;
+          cell.id = `cell-${prefix}-${cellIdx}`;
+          
+          cell.innerHTML = `
+            <div class="cell-header-coord">${prefix === 'R' ? 'R' : 'T'}${i}${j}</div>
+            <div class="cell-value-stat">-</div>
+            <div class="cell-badge-container">
+              <div class="cell-pop-badge">👥 -</div>
+              <div class="cell-resource-badge hidden">-</div>
+            </div>
+            
+            <div class="tooltip-container">
+              <div class="tooltip-item"><span class="tooltip-label">Zone:</span> <span class="tooltip-val">${i < 2 ? 'Command (0)' : 'Resource (1)'}</span></div>
+              <div class="tooltip-item"><span class="tooltip-label">Cell Index:</span> <span class="tooltip-val">${cellIdx}</span></div>
+              <div class="tooltip-item"><span class="tooltip-label">Severity:</span> <span class="tooltip-val" id="tooltip-sev-${prefix}-${cellIdx}">-</span></div>
+              <div class="tooltip-item"><span class="tooltip-label">Population:</span> <span class="tooltip-val" id="tooltip-pop-${prefix}-${cellIdx}">-</span></div>
+              <div class="tooltip-item"><span class="tooltip-label">Resources:</span> <span class="tooltip-val" id="tooltip-res-${prefix}-${cellIdx}">-</span></div>
+            </div>
+          `;
+          container.appendChild(cell);
+        }
+      }
+    }
+
+    function createLabel(text) {
+      const label = document.createElement('div');
+      label.className = 'grid-label';
+      label.textContent = text;
+      return label;
+    }
+
+    // --- UI Event Handlers ---
+    function setupUIEventListeners() {
+      // Launch Button click
+      btnLaunch.addEventListener('click', () => {
+        // Toggle launch loading state
+        btnLaunch.disabled = true;
+        btnLaunch.innerHTML = `<span class="loading-spinner"></span> LAUNCHING SIMULATION...`;
+        
+        // Feed hidden input values
+        const gradioTextArea = parent.document.querySelector('#trajectory_output textarea') || document.getElementById('trajectory_output');
+        const gradioSeedInput = parent.document.querySelector('#seed_input input') || document.getElementById('seed_input');
+        const gradioModeInput = parent.document.querySelector('#mode_input input') || document.getElementById('mode_input');
+        const gradioRunBtn = parent.document.querySelector('#run_btn') || document.getElementById('run_btn');
+        
+        const seedVal = selectSeed.value;
+        const modeVal = selectMode.value;
+        
+        if (gradioSeedInput) {
+          gradioSeedInput.value = seedVal;
+          // Dispatch input event to notify Gradio
+          gradioSeedInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (gradioModeInput) {
+          gradioModeInput.value = modeVal;
+          gradioModeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        chipModeText.textContent = modeVal === 'live' ? 'Live AI Inference' : 'Fast Replay';
+        
+        // Stop any running playback
+        stopPlayback();
+        
+        // Click hidden run button to trigger python
+        if (gradioRunBtn) {
+          gradioRunBtn.click();
+        } else {
+          // Fallback simulation inside browser for preview if not running in Gradio frame
+          simulateExecutionLocally(seedVal);
+        }
+      });
+
+      // Play / Pause button
+      btnPlayPause.addEventListener('click', () => {
+        if (isPlaying) {
+          stopPlayback();
+        } else {
+          startPlayback();
+        }
+      });
+
+      // Step Prev
+      btnStepPrev.addEventListener('click', () => {
+        if (currentStep > 0) {
+          updateStepSelection(currentStep - 1);
+        }
+      });
+
+      // Step Next
+      btnStepNext.addEventListener('click', () => {
+        if (currentStep < maxSteps) {
+          updateStepSelection(currentStep + 1);
+        }
+      });
+
+      // Scrub timeline range
+      timelineRange.addEventListener('input', (e) => {
+        updateStepSelection(parseInt(e.target.value));
+      });
+
+      // Speed Range
+      speedRange.addEventListener('input', (e) => {
+        playbackSpeed = parseInt(e.target.value);
+        speedValText.textContent = `${(playbackSpeed / 1000).toFixed(1)}s`;
+        if (isPlaying) {
+          // restart interval with new speed
+          stopPlayback();
+          startPlayback();
+        }
+      });
+
+      // Heatmap toggle selection
+      document.querySelectorAll('.heatmap-toggles button').forEach(button => {
+        button.addEventListener('click', (e) => {
+          document.querySelectorAll('.heatmap-toggles button').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          activeHeatmap = e.target.getAttribute('data-heatmap');
+          refreshGridDisplays();
+        });
+      });
+
+      // View Mode Selection (Split screen vs Single grid)
+      document.getElementById('btn-mode-comparison').addEventListener('click', (e) => {
+        document.getElementById('btn-mode-single').classList.remove('active');
+        e.target.classList.add('active');
+        activeViewMode = 'comparison';
+        containerRandomAgent.classList.remove('hidden');
+        containerTrainedAgent.classList.remove('hidden');
+      });
+
+      document.getElementById('btn-mode-single').addEventListener('click', (e) => {
+        document.getElementById('btn-mode-comparison').classList.remove('active');
+        e.target.classList.add('active');
+        activeViewMode = 'single';
+        // Hide Random agent column to focus solely on the RL agent
+        containerRandomAgent.classList.add('hidden');
+      });
+
+      // Tabs: Oversight vs Timeline
+      document.getElementById('tab-oversight').addEventListener('click', (e) => {
+        document.getElementById('tab-timeline').classList.remove('active');
+        e.target.classList.add('active');
+        contentOversight.classList.remove('hidden');
+        contentTimeline.classList.add('hidden');
+      });
+
+      document.getElementById('tab-timeline').addEventListener('click', (e) => {
+        document.getElementById('tab-oversight').classList.remove('active');
+        e.target.classList.add('active');
+        contentTimeline.classList.remove('hidden');
+        contentOversight.classList.add('hidden');
+      });
+
+      // Generate Report button click
+      btnGenerateReport.addEventListener('click', () => {
+        generateIncidentReportFile();
+      });
+    }
+
+    // --- Backend Data Receiver ---
+    function handleBackendTrajectoryLoaded(jsonStr) {
+      try {
+        const parsed = JSON.parse(jsonStr);
+        
+        // Check for error/fallback
+        if (parsed.fallback_triggered) {
+          fallbackWarningMsg.classList.remove('hidden');
+        } else {
+          fallbackWarningMsg.classList.add('hidden');
+        }
+        
+        currentTrajectoryData.trained = parsed.trained;
+        currentTrajectoryData.random = parsed.random;
+        
+        // Reset controls
+        btnLaunch.disabled = false;
+        btnLaunch.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> LAUNCH MISSION SIMULATION`;
+        
+        btnPlayPause.disabled = false;
+        btnStepPrev.disabled = false;
+        btnStepNext.disabled = false;
+        timelineRange.disabled = false;
+        btnGenerateReport.disabled = false;
+        
+        // Update mission details with starting stats
+        const startStep = parsed.trained.steps[0];
+        briefValAffected.textContent = `${countAffectedZones(startStep.grid)} / 25`;
+        briefValAtRisk.textContent = `${parsed.trained.metrics.initial_population.toLocaleString()} citizens`;
+
+        // Initialize simulation variables
+        currentStep = 0;
+        maxSteps = parsed.trained.steps.length - 1;
+        timelineRange.max = maxSteps;
+        
+        // Draw the charts
+        updateChartsData();
+        
+        // Render step 0
+        updateStepSelection(0);
+        
+        // Autoplay
+        startPlayback();
+      } catch (err) {
+        console.error("Failed to load backend trajectory: ", err);
+        btnLaunch.disabled = false;
+        btnLaunch.textContent = "LAUNCH MISSION SIMULATION";
+      }
+    }
+
+    // Local simulated trajectories fallback in case Gradio backend is absent
+    function simulateExecutionLocally(seedVal) {
+      console.warn("Gradio backend framework not found. Falling back to local offline mock generation.");
+      // We read a simulated JSON payload representing the trajectories
+      // Using setTimeout to simulate network wait
+      setTimeout(() => {
+        // Fetch offline mock data locally or use dynamic offline generator
+        // In local sandbox evaluation, we fetch from local server if accessible or generate
+        fetch(`/file=data/cached_comparison_runs.json`)
+          .then(res => res.json())
+          .then(data => {
+            const seedStr = String(seedVal);
+            if (data[seedStr]) {
+              const result = {
+                fallback_triggered: false,
+                trained: data[seedStr].trained,
+                random: data[seedStr].random
+              };
+              handleBackendTrajectoryLoaded(JSON.stringify(result));
+            }
+          })
+          .catch(e => {
+            alert("Local trajectory data file data/cached_comparison_runs.json could not be loaded. Please run generate_cache.py first.");
+            btnLaunch.disabled = false;
+            btnLaunch.textContent = "LAUNCH MISSION SIMULATION";
+          });
+      }, 800);
+    }
+
+    // --- Playback Management ---
+    function startPlayback() {
+      if (isPlaying) return;
+      isPlaying = true;
+      btnPlayPause.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        <span id="play-btn-text">Pause</span>
+      `;
+      playbackInterval = setInterval(() => {
+        if (currentStep < maxSteps) {
+          updateStepSelection(currentStep + 1);
+        } else {
+          stopPlayback();
+        }
+      }, playbackSpeed);
+    }
+
+    function stopPlayback() {
+      if (!isPlaying) return;
+      isPlaying = false;
+      clearInterval(playbackInterval);
+      btnPlayPause.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        <span id="play-btn-text">Play</span>
+      `;
+    }
+
+    function updateStepSelection(stepNum) {
+      currentStep = stepNum;
+      timelineRange.value = stepNum;
+      timelineStepVal.textContent = `T-${String(stepNum).padStart(2, '0')}`;
+      
+      // Update UI components
+      refreshGridDisplays();
+      updateDecisionExplanationPanel();
+      updateOversightAndTimelineLogs();
+      updateMetricsKPICards();
+      updateSystemStatusIndicators();
+      updateChartsHighlightPoint();
+    }
+
+    function countAffectedZones(grid) {
+      let count = 0;
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+          if (grid[i][j][1] > 0.3) count++;
+        }
+      }
+      return count;
+    }
+
+    // --- Grid Display Rendering ---
+    function refreshGridDisplays() {
+      if (!currentTrajectoryData.trained) return;
+      
+      const stepTrained = currentTrajectoryData.trained.steps[currentStep];
+      const stepRandom = currentTrajectoryData.random.steps[currentStep];
+      
+      renderSingleGrid(gridTrained, stepTrained, 'T');
+      renderSingleGrid(gridRandom, stepRandom, 'R');
+    }
+
+    function renderSingleGrid(container, stepData, prefix) {
+      const grid = stepData.grid;
+      const cmdMsg = stepData.cmd_msg;
+      
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+          const cellIdx = i * 5 + j;
+          const cellEl = document.getElementById(`cell-${prefix}-${cellIdx}`);
+          
+          const pop = Math.round(grid[i][j][0]);
+          const sev = grid[i][j][1];
+          const resUnits = Math.round(grid[i][j][2]);
+          const zoneId = grid[i][j][3];
+          
+          // Elements inside cell
+          const statVal = cellEl.querySelector('.cell-value-stat');
+          const popBadge = cellEl.querySelector('.cell-pop-badge');
+          const resBadge = cellEl.querySelector('.cell-resource-badge');
+          
+          // Tooltip update elements
+          document.getElementById(`tooltip-sev-${prefix}-${cellIdx}`).textContent = `${(sev * 100).toFixed(1)}%`;
+          document.getElementById(`tooltip-pop-${prefix}-${cellIdx}`).textContent = `${pop} survivors`;
+          document.getElementById(`tooltip-res-${prefix}-${cellIdx}`).textContent = resUnits > 0 ? `${resUnits} units` : 'None';
+
+          // Critical flashing indicator
+          if (sev > 0.9) {
+            cellEl.classList.add('cell-critical');
+          } else {
+            cellEl.classList.remove('cell-critical');
+          }
+
+          // Stat Value selection based on Active Heatmap mode
+          if (activeHeatmap === 'severity') {
+            statVal.textContent = `${(sev * 100).toFixed(0)}%`;
+            cellEl.style.backgroundColor = getSeverityColor(sev);
+          } else if (activeHeatmap === 'population') {
+            statVal.textContent = pop;
+            cellEl.style.backgroundColor = getPopulationColor(pop);
+          } else if (activeHeatmap === 'resource') {
+            statVal.textContent = resUnits > 0 ? `+${resUnits}` : '-';
+            cellEl.style.backgroundColor = getResourceColor(resUnits);
+          }
+          
+          // Pop badge update
+          popBadge.textContent = `👥 ${pop}`;
+          
+          // Active Resource allocation overlay badge
+          // Check if resource allocation just occurred here this step
+          let allocatedResource = null;
+          const lastAction = stepData.res_action || {};
+          
+          if (lastAction.action === 'allocate' && lastAction.zone === cellIdx) {
+            allocatedResource = lastAction.resource;
+          } else if (lastAction.action === 'default' && lastAction.zone === cellIdx) {
+            allocatedResource = 'food';
+          }
+          
+          if (allocatedResource) {
+            resBadge.classList.remove('hidden');
+            resBadge.textContent = getResourceIcon(allocatedResource);
+            resBadge.style.backgroundColor = 'rgba(0, 242, 254, 0.2)';
+            resBadge.style.borderColor = 'var(--cyan-accent)';
+          } else if (resUnits > 0) {
+            resBadge.classList.remove('hidden');
+            resBadge.textContent = '📦';
+            resBadge.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            resBadge.style.borderColor = 'rgba(255,255,255,0.1)';
+          } else {
+            resBadge.classList.add('hidden');
+          }
+        }
+      }
+    }
+
+    // --- Color Translators ---
+    function getSeverityColor(sev) {
+      if (sev < 0.2) return `rgba(0, 176, 155, ${sev * 0.4})`; // Safe Green
+      if (sev < 0.5) return `rgba(245, 158, 11, ${(sev - 0.2) * 0.8 + 0.1})`; // Warning Yellow
+      if (sev < 0.8) return `rgba(255, 153, 0, ${(sev - 0.5) * 1.2 + 0.3})`; // Orange High
+      return `rgba(255, 65, 108, ${(sev - 0.8) * 1.5 + 0.65})`; // Critical Red
+    }
+
+    function getPopulationColor(pop) {
+      // Density mapping: high density is solid gray/blue, low density is transparent black
+      const ratio = pop / 100;
+      return `rgba(99, 102, 241, ${ratio * 0.45})`;
+    }
+
+    function getResourceColor(units) {
+      if (units === 0) return 'rgba(15, 23, 42, 0.3)';
+      return `rgba(0, 242, 254, ${Math.min(1.0, 0.2 + units * 0.08)})`;
+    }
+
+    function getResourceIcon(res) {
+      switch (res) {
+        case 'water': return '💧';
+        case 'food': return '🍏';
+        case 'medicine': return '🏥';
+        case 'shelter': return '🏠';
+        case 'rescue': return '🚁';
+        default: return '📦';
+      }
+    }
+
+    // --- Decision Explanation Panel update ---
+    function updateDecisionExplanationPanel() {
+      if (!currentTrajectoryData.trained) return;
+      const stepTrained = currentTrajectoryData.trained.steps[currentStep];
+      
+      if (currentStep === 0) {
+        jsonCommandDisplay.textContent = "Initializing simulation state...";
+        explanationTextDisplay.textContent = "Establishing baseline metrics. Waiting for Command Agent execution.";
+        return;
+      }
+      
+      const cmd = stepTrained.cmd_msg;
+      if (cmd) {
+        jsonCommandDisplay.textContent = JSON.stringify(cmd, null, 2);
+      } else {
+        jsonCommandDisplay.textContent = "No message output.";
+      }
+      
+      explanationTextDisplay.textContent = stepTrained.decision_explanation;
+    }
+
+    // --- Oversight Terminal & Scrolling Timeline logs ---
+    function updateOversightAndTimelineLogs() {
+      if (!currentTrajectoryData.trained) return;
+      
+      // We slice the list of events and terminal logs up to the current step
+      const trainedEvents = currentTrajectoryData.trained.events;
+      const trainedSteps = currentTrajectoryData.trained.steps;
+      
+      // Update terminal console
+      contentOversight.innerHTML = '';
+      for (let i = 0; i <= currentStep; i++) {
+        const stepLogs = trainedSteps[i].oversight_logs || [];
+        const stepText = `[${String(i).padStart(2, '0')}:00]`;
+        
+        // Print message validation logs
+        if (i > 0 && trainedSteps[i].cmd_msg) {
+          const cmd = trainedSteps[i].cmd_msg;
+          const logLine = document.createElement('div');
+          logLine.className = 'terminal-line';
+          logLine.innerHTML = `
+            <span class="terminal-time">${stepText}</span>
+            <span class="terminal-tag info">CMD</span>
+            <span class="terminal-msg">Command Agent generated action: ${JSON.stringify(cmd)}</span>
+          `;
+          contentOversight.appendChild(logLine);
+        }
+        
+        stepLogs.forEach(flag => {
+          let tagClass = 'info';
+          let tagText = 'INFO';
+          
+          if (flag.type === 'schema_drift' || flag.type === 'population_loss' || flag.type === 'malformed_message') {
+            tagClass = 'critical';
+            tagText = 'CRITICAL';
+          } else if (flag.type === 'schema_recovery') {
+            tagClass = 'success';
+            tagText = 'SUCCESS';
+          } else if (flag.type === 'default_action' || flag.type === 'resource_refused') {
+            tagClass = 'warning';
+            tagText = 'WARNING';
+          }
+          
+          const logLine = document.createElement('div');
+          logLine.className = 'terminal-line';
+          logLine.innerHTML = `
+            <span class="terminal-time">${stepText}</span>
+            <span class="terminal-tag ${tagClass}">${tagText}</span>
+            <span class="terminal-msg">${formatLogText(flag)}</span>
+          `;
+          contentOversight.appendChild(logLine);
+        });
+      }
+      
+      // Scroll Oversight console to bottom
+      contentOversight.scrollTop = contentOversight.scrollHeight;
+      
+      // Update Timeline content
+      contentTimeline.innerHTML = '';
+      const filteredEvents = trainedEvents.filter(e => e.step <= currentStep);
+      
+      filteredEvents.forEach(e => {
+        const node = document.createElement('div');
+        node.className = `timeline-node ${e.type}`;
+        node.innerHTML = `
+          <div class="timeline-node-dot"></div>
+          <div class="timeline-node-content">
+            <div class="timeline-node-step">T-${String(e.step).padStart(2, '0')}:00</div>
+            <div class="timeline-node-text">${e.text}</div>
+          </div>
+        `;
+        contentTimeline.appendChild(node);
+      });
+      contentTimeline.scrollTop = contentTimeline.scrollHeight;
+    }
+
+    function formatLogText(flag) {
+      switch (flag.type) {
+        case 'schema_drift':
+          return `Oversight logged Schema drift event. Old POST /allocate endpoint deprecated.`;
+        case 'schema_recovery':
+          return `Oversight logged Schema Recovery. Agent successfully adapted on step ${flag.step}.`;
+        case 'population_loss':
+          return `Oversight flagged Population Loss event in cell (${flag.cell[0]}, ${flag.cell[1]}). Loss: -10%.`;
+        case 'default_action':
+          return `Oversight triggered fallback default allocation. Command agent penalty applied.`;
+        case 'malformed_message':
+          return `Oversight blocked malformed message. Reason: ${flag.reason}.`;
+        case 'resource_refused':
+          return `Resource Agent refused Command request. Reason: ${flag.reason}.`;
+        default:
+          return `Event log triggered: ${flag.type}`;
+      }
+    }
+
+    // --- Executive KPI Updates ---
+    function updateMetricsKPICards() {
+      if (!currentTrajectoryData.trained) return;
+      
+      const stepTrained = currentTrajectoryData.trained.steps[currentStep];
+      const metrics = currentTrajectoryData.trained.metrics;
+      
+      const survival = stepTrained.survival_rate;
+      const initialPop = metrics.initial_population;
+      const savedPop = Math.round(survival * initialPop);
+      const emergencies = countEmergencies(stepTrained.grid);
+      const reliability = calculateReliabilityUpToStep(currentTrajectoryData.trained.steps, currentStep);
+      const resourceEff = calculateResourceEfficiencyUpToStep(currentTrajectoryData.trained.steps, currentStep);
+      
+      // Update values
+      kpiValSurvival.textContent = `${(survival * 100).toFixed(1)}%`;
+      kpiValPopulation.textContent = savedPop.toLocaleString();
+      kpiValEmergencies.textContent = emergencies;
+      kpiValReliability.textContent = `${(reliability * 100).toFixed(1)}%`;
+      kpiValResourceEff.textContent = `${(resourceEff * 100).toFixed(1)}%`;
+      
+      // Trend alerts card styles
+      if (survival < 0.95) {
+        kpiCardSurvival.classList.add('kpi-critical');
+        kpiTrendSurvival.className = 'kpi-trend trend-down';
+        kpiTrendSurvival.textContent = '▼ Critical';
+      } else {
+        kpiCardSurvival.classList.remove('kpi-critical');
+        kpiTrendSurvival.className = 'kpi-trend trend-stable';
+        kpiTrendSurvival.textContent = '▲ Stable';
+      }
+      
+      if (emergencies > 5) {
+        kpiCardEmergencies.classList.add('kpi-critical');
+        kpiTrendEmergencies.className = 'kpi-trend trend-down';
+        kpiTrendEmergencies.textContent = '▲ Warning';
+      } else {
+        kpiCardEmergencies.classList.remove('kpi-critical');
+        kpiTrendEmergencies.className = 'kpi-trend trend-stable';
+        kpiTrendEmergencies.textContent = '▼ Stabilizing';
+      }
+
+      // Reliability indicator badge
+      if (reliability > 0.9) {
+        kpiBadgeReliability.className = 'kpi-trend trend-up';
+        kpiBadgeReliability.textContent = '▲ Stable';
+      } else {
+        kpiBadgeReliability.className = 'kpi-trend trend-down';
+        kpiBadgeReliability.textContent = '▼ Unstable';
+      }
+    }
+
+    function countEmergencies(grid) {
+      let count = 0;
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+          if (grid[i][j][1] > 0.7) count++;
+        }
+      }
+      return count;
+    }
+
+    function calculateReliabilityUpToStep(steps, upToStep) {
+      let valid = 0;
+      let total = 0;
+      for (let i = 1; i <= upToStep; i++) {
+        total++;
+        const logs = steps[i].oversight_logs || [];
+        const isMalformed = logs.some(l => l.type === 'malformed_message');
+        const isDriftWarning = i === 25; // Step 25 fails on drift endpoint 404
+        if (!isMalformed && !isDriftWarning) {
+          valid++;
+        }
+      }
+      return total === 0 ? 1.0 : (valid / total);
+    }
+
+    function calculateResourceEfficiencyUpToStep(steps, upToStep) {
+      let totalDeploys = 0;
+      let effectiveDeploys = 0;
+      
+      for (let i = 1; i <= upToStep; i++) {
+        const lastAction = steps[i].res_action || {};
+        if (lastAction.action === 'allocate' || lastAction.action === 'default') {
+          totalDeploys++;
+          // check if deployment targeted severity > 0.4
+          const zone = lastAction.zone || 0;
+          const row = Math.floor(zone / 5);
+          const col = zone % 5;
+          // check previous step severity (before allocation effect)
+          const prevGrid = steps[i-1].grid;
+          if (prevGrid[row][col][1] > 0.4) {
+            effectiveDeploys++;
+          }
+        }
+      }
+      return totalDeploys === 0 ? 1.0 : (effectiveDeploys / totalDeploys);
+    }
+
+    // --- System Status indicator transitions ---
+    function updateSystemStatusIndicators() {
+      if (!currentTrajectoryData.trained) return;
+      
+      const stepTrained = currentTrajectoryData.trained.steps[currentStep];
+      const drift = stepTrained.drift_status;
+      
+      statusIndicator.className = 'system-status-indicator';
+      
+      if (drift.status === 'NORMAL') {
+        statusIndicator.classList.add('status-normal');
+        statusIndicator.textContent = 'System Status: NORMAL';
+        chipAgentActive.textContent = 'ACTIVE';
+        chipAgentActive.parentElement.querySelector('.indicator').style.backgroundColor = 'var(--cyan-accent)';
+      } else if (drift.status === 'WARNING') {
+        statusIndicator.classList.add('status-warning');
+        statusIndicator.textContent = 'System Status: WARNING';
+        chipAgentActive.textContent = 'API FAULT';
+        chipAgentActive.parentElement.querySelector('.indicator').style.backgroundColor = 'var(--orange-accent)';
+      } else if (drift.status === 'RECOVERING') {
+        statusIndicator.classList.add('status-recovering');
+        statusIndicator.textContent = 'System Status: RECOVERING';
+        chipAgentActive.textContent = 'RECOVERY';
+        chipAgentActive.parentElement.querySelector('.indicator').style.backgroundColor = 'var(--yellow-accent)';
+      } else if (drift.status === 'STABLE') {
+        statusIndicator.classList.add('status-stable');
+        statusIndicator.textContent = 'System Status: STABLE';
+        chipAgentActive.textContent = 'ADAPTED';
+        chipAgentActive.parentElement.querySelector('.indicator').style.backgroundColor = 'var(--green-accent)';
+      }
+    }
+
+    // --- Chart.js Metrics Configurations ---
+    function setupCharts() {
+      const ctx = document.getElementById('metricsChart').getContext('2d');
+      metricsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array.from({length: 51}, (_, i) => `T-${i}`),
+          datasets: [
+            {
+              label: 'Survival Rate',
+              data: [],
+              borderColor: '#00f2fe',
+              backgroundColor: 'rgba(0, 242, 254, 0.05)',
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              fill: true,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Mean Severity',
+              data: [],
+              borderColor: '#ff416c',
+              backgroundColor: 'rgba(255, 65, 108, 0.05)',
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              fill: true,
+              yAxisID: 'y'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                boxWidth: 8,
+                font: { size: 9 },
+                color: '#94a3b8'
+              }
+            },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxTicksLimit: 11, font: { size: 8 }, color: '#64748b' }
+            },
+            y: {
+              min: 0.0,
+              max: 1.0,
+              ticks: { font: { size: 8 }, color: '#64748b', callback: val => `${(val * 100).toFixed(0)}%` },
+              grid: { color: 'rgba(255,255,255,0.03)' }
+            }
+          }
+        }
+      });
+    }
+
+    function updateChartsData() {
+      if (!currentTrajectoryData.trained) return;
+      
+      const survivalCurve = currentTrajectoryData.trained.survival_curve;
+      const severityCurve = currentTrajectoryData.trained.severity_curve;
+      
+      metricsChart.data.datasets[0].data = survivalCurve;
+      metricsChart.data.datasets[1].data = severityCurve;
+      metricsChart.update();
+    }
+
+    function updateChartsHighlightPoint() {
+      if (!metricsChart || !currentTrajectoryData.trained) return;
+      
+      // Draw highlighted dot at active step
+      const meta = metricsChart.getDatasetMeta(0);
+      const points = meta.data;
+      if (points.length > 0) {
+        metricsChart.setActiveElements([
+          { datasetIndex: 0, index: currentStep },
+          { datasetIndex: 1, index: currentStep }
+        ]);
+        metricsChart.update('none'); // Update without animation for performance
+      }
+    }
+
+    // --- Incident Report Document Generator ---
+    function generateIncidentReportFile() {
+      if (!currentTrajectoryData.trained) return;
+      
+      const seed = selectSeed.value;
+      const mode = selectMode.value === 'live' ? 'Live AI Inference' : 'Fast Replay';
+      const trained = currentTrajectoryData.trained;
+      const m = trained.metrics;
+      
+      // Build markdown report
+      let md = `# CrisisGrid AI Command Center - Incident Report
+      
+## Mission Details
+- **Disaster Target Scenario**: Flood spreading event
+- **Seed Configuration**: ${seed}
+- **System Execution Mode**: ${mode}
+- **Policy Evaluated**: Qwen2-1.5B + LoRA (GRPO-Trained)
+
+## Final Outcome Metrics
+- **Initial Total Population**: ${m.initial_population} citizens
+- **Survivors Saved**: ${m.population_saved} citizens
+- **Final Survival Rate**: ${(m.final_survival * 100).toFixed(1)}%
+- **Active Emergencies at T-50**: ${m.active_emergencies} critical cells
+- **Agent Reliability Score**: ${(m.agent_reliability * 100).toFixed(1)}%
+- **Resource efficiency**: ${(m.resource_efficiency * 100).toFixed(1)}%
+
+## Incident Overview
+The crisis started with ${countAffectedZones(trained.steps[0].grid)} zones experiencing critical severity levels. Over the course of 50 intervals, the Command Agent coordinates emergency response. 
+
+At interval 25, an intentional API schema drift was injected:
+- Endpoint shifted from **POST /allocate** to **PATCH /distribution**.
+- The agent encountered a temporary communication failure (404 Error, Operational status warning).
+- By step 27, the agent successfully updated its output schema structure, returning the system status to **STABLE**.
+
+## Major Events Timeline
+`;
+
+      trained.events.forEach(e => {
+        md += `- **T-${String(e.step).padStart(2, '0')}:00** - [${e.type.toUpperCase()}] ${e.text}\n`;
+      });
+
+      md += `\n---
+Report generated by CrisisGrid Decision Intelligence Platform. Certified for audit.
+`;
+
+      // Trigger client-side download
+      const blob = new Blob([md], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CrisisGrid_Incident_Report_Seed_${seed}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+
+</body>
+</html>

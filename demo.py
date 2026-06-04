@@ -103,7 +103,29 @@ def decode_action(llm_text: str, rng: np.random.RandomState) -> Tuple[Dict[str, 
 
 
 def build_prompt(obs: dict) -> str:
-    return "Output ONLY one valid JSON command with keys intent, zone, resource, priority, units:"
+    timestep = obs.get("timestep", 0)
+    api_status = obs.get("api_status", "active")
+    schema_version = obs.get("current_schema_version", 1)
+    last_error = obs.get("last_error", None)
+    grid = obs.get("grid", [])
+
+    worst = []
+    for i, row in enumerate(grid):
+        for j, cell in enumerate(row):
+            sev = float(cell[1]) if len(cell) > 1 else 0.0
+            worst.append((sev, i * 5 + j))
+    worst.sort(reverse=True)
+    top = [z for _, z in worst[:3]]
+
+    prompt = (
+        "You are the Command Agent for CrisisGrid.\n"
+        "Output ONLY one valid JSON command with keys: intent, zone, resource, priority, units.\n"
+        f"Schema={schema_version} API={api_status}\n"
+    )
+    if last_error:
+        prompt += f"LAST ERROR: {last_error}\n"
+    prompt += f"Step={timestep} critical_zones={top}\nYour JSON command:"
+    return prompt
 
 
 def get_clean_checkpoint_path(checkpoint_path: str):
@@ -151,6 +173,7 @@ def get_clean_checkpoint_path(checkpoint_path: str):
 def load_model_and_tokenizer(checkpoint_path: str):
     import os
     import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
 
     clean_path = get_clean_checkpoint_path(checkpoint_path)
@@ -159,37 +182,15 @@ def load_model_and_tokenizer(checkpoint_path: str):
     else:
         print(f"Loaded checkpoint from: {clean_path} (HuggingFace Hub)")
 
-    try:
-        from unsloth import FastLanguageModel  # type: ignore
-
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=BASE_MODEL,
-            max_seq_length=2048,
-            load_in_4bit=True,
-            dtype=None,
-        )
-        model = PeftModel.from_pretrained(model, clean_path)
-        model.eval()
-        return model, tokenizer
-    except ModuleNotFoundError:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-
-        bnb_cfg = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL,
-            quantization_config=bnb_cfg,
-            device_map="auto",
-            torch_dtype=torch.float16,
-        )
-        model = PeftModel.from_pretrained(model, clean_path)
-        model.eval()
-        return model, tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
+    )
+    model = PeftModel.from_pretrained(model, clean_path)
+    model.eval()
+    return model, tokenizer
 
 
 def generate_one(model, tokenizer, prompt: str, max_new_tokens: int) -> str:
