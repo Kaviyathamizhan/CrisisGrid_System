@@ -1,13 +1,16 @@
 ---
-title: CrisisGrid - Teaching LLMs to Save Cities Through Multi-Agent RL
-emoji: 🏙️
-colorFrom: red
+title: CrisisGrid - Premium AI Command Center
+emoji: 🚀
+colorFrom: gray
 colorTo: blue
 sdk: gradio
-app_file: app.py
+sdk_version: "4.44.0"
 python_version: "3.10"
+app_file: app.py
 pinned: false
 ---
+
+Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
 
 # 🏙️ CrisisGrid: Teaching LLMs to Save Cities with GRPO
 
