@@ -139,9 +139,10 @@ def load_model_and_tokenizer(lora_path_or_repo: str):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
+    from huggingface_hub import snapshot_download
+    import json
 
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-    
     # Check GPU availability
     device_map = "auto" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
@@ -152,12 +153,39 @@ def load_model_and_tokenizer(lora_path_or_repo: str):
         device_map=device_map,
         low_cpu_mem_usage=True
     )
-    model = PeftModel.from_pretrained(model, lora_path_or_repo)
+
+    # Sanitize ALL unknown keys from adapter_config.json
+    # Unsloth injects proprietary fields that crash standard PEFT
+    try:
+        local_dir = snapshot_download(lora_path_or_repo)
+    except Exception:
+        local_dir = lora_path_or_repo # Fallback if it's already a local path
+        
+    config_path = os.path.join(local_dir, "adapter_config.json")
+    if os.path.exists(config_path):
+        from peft import LoraConfig
+        import inspect
+        valid_keys = set(inspect.signature(LoraConfig.__init__).parameters.keys())
+        valid_keys.discard("self")
+        # Also keep peft_type and other meta fields
+        valid_keys.update(["peft_type", "auto_mapping", "base_model_name_or_path", 
+                           "task_type", "inference_mode", "revision"])
+
+        with open(config_path, "r") as f:
+            cfg_dict = json.load(f)
+
+        cleaned = {k: v for k, v in cfg_dict.items() if k in valid_keys}
+
+        if len(cleaned) != len(cfg_dict):
+            with open(config_path, "w") as f:
+                json.dump(cleaned, f)
+
+    model = PeftModel.from_pretrained(model, local_dir)
     model.eval()
     return model, tokenizer
 
 
-def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 700) -> str:
+def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 600) -> str:
     import torch
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)

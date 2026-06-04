@@ -34,7 +34,7 @@ from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
 
 
-BASE_MODEL = "unsloth/Qwen2-1.5B-Instruct-bnb-4bit"
+BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 REQUIRED_FIELDS = ("intent", "zone", "resource", "priority")
 
 
@@ -261,51 +261,26 @@ def get_clean_checkpoint_path(checkpoint_path: str):
     return local_dir
 
 def _load_model_and_tokenizer(checkpoint_path: str):
-    """
-    Prefer Unsloth if available. If not installed (common in Spaces builds),
-    fall back to pure Transformers + bitsandbytes 4-bit loading.
-    """
-    clean_path = get_clean_checkpoint_path(checkpoint_path)
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    import torch
+
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+    model = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype="auto",
+        device_map="auto"
+    )
 
     # Attach LoRA adapter from checkpoint
     from peft import PeftModel
+    
+    clean_path = get_clean_checkpoint_path(checkpoint_path)
 
-    try:
-        from unsloth import FastLanguageModel  # type: ignore
-
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=BASE_MODEL,
-            max_seq_length=2048,
-            load_in_4bit=True,
-            dtype=None,
-        )
-        model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
-        print("Loaded LoRA adapter successfully")
-        model.eval()
-        return model, tokenizer
-
-    except ModuleNotFoundError:
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-        import torch
-
-        bnb_cfg = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-        )
-
-        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL, use_fast=True)
-        model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL,
-            quantization_config=bnb_cfg,
-            device_map="auto",
-            torch_dtype=torch.float16,
-        )
-        model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
-        print("Loaded LoRA adapter successfully")
-        model.eval()
-        return model, tokenizer
+    model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
+    print("Running in FULL PRECISION mode (pure HF + PEFT)")
+    print("Loaded LoRA adapter successfully")
+    model.eval()
+    return model, tokenizer
 
 
 def _sample_generate(model, tokenizer, prompt: str, max_new_tokens: int = 128) -> str:
@@ -425,41 +400,41 @@ def main():
                 env.reset()
         return rewards
 
+    # Build prompt dataset from environment observations
+    from datasets import Dataset as HFDataset
+    print(f"[dataset] Generating {cfg.episodes} episode prompts...")
+    prompt_records = []
+    dataset_env = CrisisGridEnv(seed=cfg.seed)
+    for i in range(cfg.episodes):
+        obs_i, _ = dataset_env.reset()
+        prompt_records.append({"prompt": build_prompt(obs_i)})
+    train_dataset = HFDataset.from_list(prompt_records)
+    print(f"[dataset] {len(train_dataset)} prompts ready.")
+
     grpo_cfg = GRPOConfig(
         output_dir=cfg.output_dir,
         learning_rate=cfg.lr,
-        per_device_train_batch_size=cfg.batch_size,
+        per_device_train_batch_size=2,
         gradient_accumulation_steps=cfg.grad_accum,
         logging_steps=cfg.logging_steps,
         save_steps=cfg.save_steps,
         report_to=["wandb"],
         max_completion_length=cfg.max_completion_length,
-        # TRL safety: generation_batch_size must be divisible by num_generations.
-        # Spaces/A100 defaults can mismatch (e.g. 4 vs 8) and hard-fail.
-        num_generations=4,
-        generation_batch_size=4,
+        num_generations=2,
     )
 
     trainer = GRPOTrainer(
         model=model,
         args=grpo_cfg,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         reward_funcs=reward_func,
+        train_dataset=train_dataset,
     )
 
-    # Resume training from checkpoint directory
-    try:
-        # If this is a full TRL checkpoint, this will resume optimizer/scheduler state too.
-        # If it's adapter-only, TRL may raise; we fall back to starting a new Trainer run
-        # but still "resume" model weights via the LoRA adapter load above.
-        trainer.train(resume_from_checkpoint=cfg.checkpoint_path)
-    except Exception as e:
-        if ckpt_kind == "lora_adapter":
-            print(f"[train] resume_from_checkpoint failed for adapter-only checkpoint: {e}")
-            print("[train] continuing with LoRA-loaded weights (no trainer state to resume).")
-            trainer.train()
-        else:
-            raise
+    # LoRA weights are already loaded into the model via PeftModel.from_pretrained().
+    # No TRL trainer state to resume — just start training with the loaded weights.
+    print("[train] Starting GRPO training with pre-loaded LoRA weights...")
+    trainer.train()
 
     wandb.finish()
     print(f"[train] done. outputs in {cfg.output_dir}")
