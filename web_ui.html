@@ -1519,11 +1519,20 @@
         btnLaunch.disabled = true;
         btnLaunch.innerHTML = `<span class="loading-spinner"></span> LAUNCHING SIMULATION...`;
         
-        // Feed hidden input values
-        const gradioTextArea = parent.document.querySelector('#trajectory_output textarea') || document.getElementById('trajectory_output');
-        const gradioSeedInput = parent.document.querySelector('#seed_input input') || document.getElementById('seed_input');
-        const gradioModeInput = parent.document.querySelector('#mode_input input') || document.getElementById('mode_input');
-        const gradioRunBtn = parent.document.querySelector('#run_btn') || document.getElementById('run_btn');
+        // Feed hidden input values safely across iframe/origin boundaries
+        let doc = document;
+        try {
+          if (window.parent && window.parent.document) {
+            doc = window.parent.document;
+          }
+        } catch (e) {
+          // Ignore CORS exceptions when running inside HF Space iframe
+        }
+        
+        const gradioTextArea = doc.querySelector('#trajectory_output textarea') || document.getElementById('trajectory_output');
+        const gradioSeedInput = doc.querySelector('#seed_input input') || doc.getElementById('seed_input') || doc.querySelector('#seed_input input');
+        const gradioModeInput = doc.querySelector('#mode_input input') || document.getElementById('mode_input') || doc.querySelector('#mode_input input');
+        const gradioRunBtn = doc.querySelector('#run_btn') || document.getElementById('run_btn');
         
         const seedVal = selectSeed.value;
         const modeVal = selectMode.value;

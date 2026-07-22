@@ -553,13 +553,20 @@ def main():
     else:
         html_content = "<h2>Error: web_ui.html not found!</h2>"
 
-    with gr.Blocks(title="CrisisGrid AI Command Center") as demo:
-        # Hidden HTML elements for Gradio JS Bridge
-        trajectory_output = gr.Textbox(elem_id="trajectory_output", visible=False)
-        seed_input = gr.Number(value=123, elem_id="seed_input", visible=False)
-        mode_input = gr.Textbox(value="replay", elem_id="mode_input", visible=False)
+    # Define CSS to hide the bridge elements in the DOM instead of removing them with visible=False
+    css = """
+    #trajectory_output, #seed_input, #mode_input, #run_btn {
+        display: none !important;
+    }
+    """
+
+    with gr.Blocks(title="CrisisGrid AI Command Center", css=css) as demo:
+        # Render bridge elements as visible so Gradio/Svelte binds state properly, but hide via CSS
+        trajectory_output = gr.Textbox(elem_id="trajectory_output", visible=True)
+        seed_input = gr.Number(value=123, elem_id="seed_input", visible=True)
+        mode_input = gr.Textbox(value="replay", elem_id="mode_input", visible=True)
         
-        run_btn = gr.Button(elem_id="run_btn", visible=False)
+        run_btn = gr.Button(elem_id="run_btn", visible=True)
 
         # Trigger simulation run and return JSON string to textarea
         run_btn.click(
