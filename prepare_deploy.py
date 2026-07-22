@@ -139,7 +139,7 @@ for item in ["app.py", "web_ui.html"]:
         shutil.copy2(src, os.path.join(HF_SPACE_DIR, item))
 
 # Create Space requirements.txt
-space_reqs = """gradio>=4.44.0
+space_reqs = """gradio>=4.44.0,<5.0
 transformers>=4.45.0
 peft>=0.12.0
 torch>=2.2.0
@@ -147,6 +147,7 @@ numpy>=1.26.0
 bitsandbytes>=0.43.0
 accelerate>=0.33.0
 huggingface_hub>=0.23.0,<0.25.0
+jinja2>=3.1.0,<3.1.5
 """
 with open(os.path.join(HF_SPACE_DIR, "requirements.txt"), "w") as f:
     f.write(space_reqs)
