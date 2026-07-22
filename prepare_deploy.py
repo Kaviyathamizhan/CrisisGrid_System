@@ -148,6 +148,7 @@ bitsandbytes>=0.43.0
 accelerate>=0.33.0
 huggingface_hub>=0.23.0,<0.25.0
 jinja2>=3.1.0,<3.1.5
+starlette>=0.36.0,<0.38.0
 """
 with open(os.path.join(HF_SPACE_DIR, "requirements.txt"), "w") as f:
     f.write(space_reqs)
