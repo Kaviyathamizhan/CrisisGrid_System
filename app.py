@@ -553,15 +553,53 @@ def main():
     else:
         html_content = "<h2>Error: web_ui.html not found!</h2>"
 
-    # Define CSS to hide the bridge elements in the DOM instead of removing them with visible=False
+    # Aggressive CSS to:
+    # 1. Hide Gradio wrapper containers around bridge elements (not just the elements themselves)
+    # 2. Remove Gradio's own header/footer/padding chrome
+    # 3. Make the HTML dashboard component fill the full viewport
     css = """
+    /* Hide bridge elements AND their parent Gradio .block wrappers */
+    .block:has(#trajectory_output),
+    .block:has(#seed_input),
+    .block:has(#mode_input),
+    .block:has(#run_btn) {
+        display: none !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
     #trajectory_output, #seed_input, #mode_input, #run_btn {
         display: none !important;
     }
+
+    /* Remove Gradio page chrome */
+    .gradio-container {
+        max-width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #0b0f19 !important;
+    }
+    footer {
+        display: none !important;
+    }
+    .main.svelte-1kyws56 {
+        padding: 0 !important;
+    }
+    .contain {
+        padding: 0 !important;
+    }
+    .app {
+        padding: 0 !important;
+    }
+
+    /* Make the HTML component full-bleed */
+    .gradio-html {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
     """
 
-    with gr.Blocks(title="CrisisGrid AI Command Center", css=css) as demo:
-        # Render bridge elements as visible so Gradio/Svelte binds state properly, but hide via CSS
+    with gr.Blocks(title="CrisisGrid AI Command Center", css=css, theme=gr.themes.Base()) as demo:
+        # Bridge elements: visible=True so Gradio mounts them in DOM for JS access, hidden by CSS above
         trajectory_output = gr.Textbox(elem_id="trajectory_output", visible=True)
         seed_input = gr.Number(value=123, elem_id="seed_input", visible=True)
         mode_input = gr.Textbox(value="replay", elem_id="mode_input", visible=True)
