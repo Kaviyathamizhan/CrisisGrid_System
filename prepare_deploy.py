@@ -146,6 +146,7 @@ torch>=2.2.0
 numpy>=1.26.0
 bitsandbytes>=0.43.0
 accelerate>=0.33.0
+huggingface_hub>=0.23.0,<0.25.0
 """
 with open(os.path.join(HF_SPACE_DIR, "requirements.txt"), "w") as f:
     f.write(space_reqs)
