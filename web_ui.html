@@ -1062,6 +1062,42 @@
     .hidden {
       display: none !important;
     }
+
+    /* Compact, operational desktop layout. Full trajectory data remains available
+       through playback without turning the shell into a scrolling document. */
+    @media (min-width: 1101px) {
+      body { overflow: hidden; }
+      .app-container { padding: 10px; gap: 10px; }
+      .glass-panel { border-radius: 6px; padding: 12px; box-shadow: none; }
+      .navbar { height: 52px; padding: 8px 14px; }
+      .nav-status-chips { gap: 6px; }
+      .status-chip { padding: 4px 8px; }
+      .kpi-row { gap: 10px; }
+      .kpi-card { height: 76px; }
+      .kpi-value { font-size: 1.45rem; }
+      .main-workspace { gap: 10px; }
+      .left-ops-panel { width: 248px; gap: 10px; }
+      .right-info-panel { width: 320px; gap: 10px; }
+      .mission-brief-details { gap: 5px; }
+      .control-deck { gap: 9px; }
+      .map-displays-wrapper { gap: 10px; }
+      .grid-container-card { padding: 12px; }
+      .crisis-grid-wrapper { max-width: min(100%, 360px); gap: 5px; }
+      .grid-cell { border-radius: 4px; padding: 4px; }
+      .cell-value-stat { font-size: 0.68rem; }
+      .cell-badge-container { font-size: 0.48rem; }
+      .explanation-panel { gap: 6px; }
+      .explanation-text-box { max-height: 68px; overflow: hidden; }
+      .oversight-terminal, .timeline-wrapper { overflow: hidden; }
+      .chart-container-card { flex-shrink: 0; }
+    }
+
+    @media (max-width: 1100px) {
+      .app-container { height: auto; min-height: 100vh; }
+      .main-workspace { flex-direction: column; }
+      .left-ops-panel, .right-info-panel { width: 100%; }
+      .map-displays-wrapper { min-height: 480px; }
+    }
   </style>
 </head>
 <body>
@@ -1205,7 +1241,7 @@
             LAUNCH MISSION SIMULATION
           </button>
           
-          <div id="fallback-warning-msg" class="brief-item hidden" style="color: var(--orange-accent); border: none; font-size: 0.75rem;">
+          <div id="mission-error-msg" class="brief-item hidden" style="color: var(--orange-accent); border: none; font-size: 0.75rem;">
             ⚠ Live inference unavailable. Running replay mode.
           </div>
 
@@ -1292,7 +1328,7 @@
           <div class="grid-container-card glass-panel" id="container-trained-agent">
             <div class="grid-card-title trained-title">
               <span style="width: 8px; height: 8px; border-radius: 50%; background-color: var(--cyan-accent); display: inline-block; box-shadow: 0 0 6px var(--cyan-accent);"></span>
-              Trained Agent Command Zone
+              <span id="trained-grid-title">Cached Policy Trajectory</span>
             </div>
             
             <div class="crisis-grid-wrapper" id="grid-trained">
@@ -1317,7 +1353,7 @@
             Command Payload: Waiting for mission launch...
           </div>
           <div class="explanation-text-box" id="explanation-text-display">
-            Decision rationale will generate dynamically based on environmental assets and disaster severity metrics.
+            Mission output will appear after the backend trajectory is received.
           </div>
         </div>
 
@@ -1368,17 +1404,6 @@
 
   </div>
 
-  <!-- Bridge elements to communicate with Gradio Python backend -->
-  <div style="display: none;">
-    <!-- Text area holding the output trajectory json string -->
-    <textarea id="trajectory_output"></textarea>
-    
-    <!-- Input textboxes / buttons -->
-    <input type="number" id="seed_input" value="123">
-    <input type="text" id="mode_input" value="replay">
-    <button id="run_btn"></button>
-  </div>
-
   <script>
     // --- Global Application State ---
     let currentStep = 0;
@@ -1412,13 +1437,14 @@
     const speedRange = document.getElementById('speed-range');
     const speedValText = document.getElementById('speed-val-text');
     const btnGenerateReport = document.getElementById('btn-generate-report');
-    const fallbackWarningMsg = document.getElementById('fallback-warning-msg');
+    const missionErrorMsg = document.getElementById('mission-error-msg');
     
     // Grid displays
     const gridRandom = document.getElementById('grid-random');
     const gridTrained = document.getElementById('grid-trained');
     const containerRandomAgent = document.getElementById('container-random-agent');
     const containerTrainedAgent = document.getElementById('container-trained-agent');
+    const trainedGridTitle = document.getElementById('trained-grid-title');
     
     // Panels
     const jsonCommandDisplay = document.getElementById('json-command-display');
@@ -1446,8 +1472,8 @@
     const briefValAffected = document.getElementById('brief-val-affected');
     const briefValAtRisk = document.getElementById('brief-val-at-risk');
 
-    // --- initialization ---
-    window.addEventListener('DOMContentLoaded', () => {
+    // Gradio may mount this component after DOMContentLoaded has already fired.
+    function initializeDashboard() {
       // Build empty grid placeholders
       buildGridSkeleton(gridRandom, 'R');
       buildGridSkeleton(gridTrained, 'T');
@@ -1462,7 +1488,16 @@
       window.loadCrisisGridTrajectory = (jsonStr) => {
         handleBackendTrajectoryLoaded(jsonStr);
       };
-    });
+      window.addEventListener('crisisgrid:trajectory', (event) => {
+        handleBackendTrajectoryLoaded(event.detail);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', initializeDashboard, { once: true });
+    } else {
+      initializeDashboard();
+    }
 
     // --- Grid Renderers ---
     function buildGridSkeleton(container, prefix) {
@@ -1519,32 +1554,17 @@
         btnLaunch.disabled = true;
         btnLaunch.innerHTML = `<span class="loading-spinner"></span> LAUNCHING SIMULATION...`;
         
-        // Feed hidden input values safely across iframe/origin boundaries
-        let doc = document;
-        try {
-          if (window.parent && window.parent.document) {
-            doc = window.parent.document;
-          }
-        } catch (e) {
-          // Ignore CORS exceptions when running inside HF Space iframe
-        }
-        
-        const gradioTextArea = doc.querySelector('#trajectory_output textarea') || document.getElementById('trajectory_output');
-        const gradioSeedInput = doc.querySelector('#seed_input input') || doc.getElementById('seed_input') || doc.querySelector('#seed_input input');
-        const gradioModeInput = doc.querySelector('#mode_input input') || document.getElementById('mode_input') || doc.querySelector('#mode_input input');
-        const gradioRunBtn = doc.querySelector('#run_btn') || document.getElementById('run_btn');
-        
         const seedVal = selectSeed.value;
         const modeVal = selectMode.value;
+        const gradioSeedInput = getGradioControl('seed_input', 'input');
+        const gradioModeInput = getGradioControl('mode_input', 'input');
+        const gradioRunBtn = getGradioControl('run_btn', 'button');
         
         if (gradioSeedInput) {
-          gradioSeedInput.value = seedVal;
-          // Dispatch input event to notify Gradio
-          gradioSeedInput.dispatchEvent(new Event('input', { bubbles: true }));
+          setGradioInputValue(gradioSeedInput, seedVal);
         }
         if (gradioModeInput) {
-          gradioModeInput.value = modeVal;
-          gradioModeInput.dispatchEvent(new Event('input', { bubbles: true }));
+          setGradioInputValue(gradioModeInput, modeVal);
         }
         
         chipModeText.textContent = modeVal === 'live' ? 'Live AI Inference' : 'Fast Replay';
@@ -1556,8 +1576,7 @@
         if (gradioRunBtn) {
           gradioRunBtn.click();
         } else {
-          // Fallback simulation inside browser for preview if not running in Gradio frame
-          simulateExecutionLocally(seedVal);
+          showLaunchError('The Gradio simulation bridge is unavailable. Reload the application and try again.');
         }
       });
 
@@ -1648,20 +1667,39 @@
       });
     }
 
+    function getGradioControl(componentId, selector) {
+      const app = document.querySelector('gradio-app');
+      const component = (app && app.shadowRoot ? app.shadowRoot.getElementById(componentId) : null)
+        || document.getElementById(componentId);
+      return component ? (component.matches(selector) ? component : component.querySelector(selector)) : null;
+    }
+
+    function setGradioInputValue(input, value) {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+    }
+
     // --- Backend Data Receiver ---
     function handleBackendTrajectoryLoaded(jsonStr) {
       try {
         const parsed = JSON.parse(jsonStr);
-        
-        // Check for error/fallback
-        if (parsed.fallback_triggered) {
-          fallbackWarningMsg.classList.remove('hidden');
-        } else {
-          fallbackWarningMsg.classList.add('hidden');
+        if (parsed.error) {
+          showLaunchError(parsed.error);
+          return;
         }
+        missionErrorMsg.classList.add('hidden');
         
         currentTrajectoryData.trained = parsed.trained;
-        currentTrajectoryData.random = parsed.random;
+        currentTrajectoryData.random = parsed.random || parsed.trained;
+        if (parsed.random) {
+          containerRandomAgent.classList.remove('hidden');
+          trainedGridTitle.textContent = 'Cached Policy Trajectory';
+        } else {
+          containerRandomAgent.classList.add('hidden');
+          trainedGridTitle.textContent = 'Live LoRA Agent Trajectory';
+        }
         
         // Reset controls
         btnLaunch.disabled = false;
@@ -1693,38 +1731,16 @@
         startPlayback();
       } catch (err) {
         console.error("Failed to load backend trajectory: ", err);
-        btnLaunch.disabled = false;
-        btnLaunch.textContent = "LAUNCH MISSION SIMULATION";
+        showLaunchError('The simulation returned an invalid trajectory payload.');
       }
     }
 
-    // Local simulated trajectories fallback in case Gradio backend is absent
-    function simulateExecutionLocally(seedVal) {
-      console.warn("Gradio backend framework not found. Falling back to local offline mock generation.");
-      // We read a simulated JSON payload representing the trajectories
-      // Using setTimeout to simulate network wait
-      setTimeout(() => {
-        // Fetch offline mock data locally or use dynamic offline generator
-        // In local sandbox evaluation, we fetch from local server if accessible or generate
-        fetch(`/file=data/cached_comparison_runs.json`)
-          .then(res => res.json())
-          .then(data => {
-            const seedStr = String(seedVal);
-            if (data[seedStr]) {
-              const result = {
-                fallback_triggered: false,
-                trained: data[seedStr].trained,
-                random: data[seedStr].random
-              };
-              handleBackendTrajectoryLoaded(JSON.stringify(result));
-            }
-          })
-          .catch(e => {
-            alert("Local trajectory data file data/cached_comparison_runs.json could not be loaded. Please run generate_cache.py first.");
-            btnLaunch.disabled = false;
-            btnLaunch.textContent = "LAUNCH MISSION SIMULATION";
-          });
-      }, 800);
+    function showLaunchError(message) {
+      stopPlayback();
+      missionErrorMsg.textContent = message;
+      missionErrorMsg.classList.remove('hidden');
+      btnLaunch.disabled = false;
+      btnLaunch.textContent = 'LAUNCH MISSION SIMULATION';
     }
 
     // --- Playback Management ---
@@ -1919,7 +1935,6 @@
       if (!currentTrajectoryData.trained) return;
       
       // We slice the list of events and terminal logs up to the current step
-      const trainedEvents = currentTrajectoryData.trained.events;
       const trainedSteps = currentTrajectoryData.trained.steps;
       
       // Update terminal console
@@ -1972,7 +1987,7 @@
       
       // Update Timeline content
       contentTimeline.innerHTML = '';
-      const filteredEvents = trainedEvents.filter(e => e.step <= currentStep);
+      const filteredEvents = buildTimelineEvents(trainedSteps, currentStep);
       
       filteredEvents.forEach(e => {
         const node = document.createElement('div');
@@ -1987,6 +2002,26 @@
         contentTimeline.appendChild(node);
       });
       contentTimeline.scrollTop = contentTimeline.scrollHeight;
+    }
+
+    function buildTimelineEvents(steps, upToStep) {
+      const events = [{ step: 0, text: 'Environment initialized from the selected scenario seed.', type: 'info' }];
+      for (let step = 1; step <= upToStep; step++) {
+        (steps[step].oversight_logs || []).forEach(flag => {
+          events.push({ step, text: formatLogText(flag), type: timelineTypeForFlag(flag.type) });
+        });
+      }
+      if (upToStep === steps.length - 1) {
+        events.push({ step: upToStep, text: `Environment episode completed with ${(steps[upToStep].survival_rate * 100).toFixed(1)}% survival.`, type: 'success' });
+      }
+      return events.slice(-6);
+    }
+
+    function timelineTypeForFlag(type) {
+      if (type === 'schema_drift' || type === 'population_loss' || type === 'malformed_message') return 'critical';
+      if (type === 'schema_recovery') return 'success';
+      if (type === 'default_action' || type === 'resource_refused') return 'warning';
+      return 'info';
     }
 
     function formatLogText(flag) {
@@ -2076,9 +2111,9 @@
       for (let i = 1; i <= upToStep; i++) {
         total++;
         const logs = steps[i].oversight_logs || [];
-        const isMalformed = logs.some(l => l.type === 'malformed_message');
-        const isDriftWarning = i === 25; // Step 25 fails on drift endpoint 404
-        if (!isMalformed && !isDriftWarning) {
+        const accepted = steps[i].command_accepted;
+        const executed = steps[i].res_action && steps[i].res_action.action === 'allocate';
+        if (accepted === undefined ? executed : accepted) {
           valid++;
         }
       }

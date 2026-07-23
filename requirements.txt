@@ -5,5 +5,6 @@ accelerate>=0.33.0,<0.35
 peft>=0.12.0,<0.14
 trl>=0.15.0,<0.16
 wandb>=0.17.0
-gradio>=4.44.0
+gradio>=5.0.0,<6.0
+huggingface_hub>=0.23.0,<0.25.0
 datasets>=2.16.0
