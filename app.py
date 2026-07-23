@@ -554,21 +554,19 @@ def main():
         html_content = "<h2>Error: web_ui.html not found!</h2>"
 
     # Aggressive CSS to:
-    # 1. Hide Gradio wrapper containers around bridge elements (not just the elements themselves)
+    # 1. Hide Gradio wrapper containers around bridge elements safely via a specific class
     # 2. Remove Gradio's own header/footer/padding chrome
     # 3. Make the HTML dashboard component fill the full viewport
     css = """
-    /* Hide bridge elements AND their parent Gradio .block wrappers */
-    .block:has(#trajectory_output),
-    .block:has(#seed_input),
-    .block:has(#mode_input),
-    .block:has(#run_btn) {
+    /* Hide bridge elements safely without affecting the main layout */
+    .bridge-hidden {
         display: none !important;
         height: 0 !important;
+        min-height: 0 !important;
         overflow: hidden !important;
-    }
-    #trajectory_output, #seed_input, #mode_input, #run_btn {
-        display: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
     }
 
     /* Remove Gradio page chrome */
@@ -599,12 +597,12 @@ def main():
     """
 
     with gr.Blocks(title="CrisisGrid AI Command Center", css=css, theme=gr.themes.Base()) as demo:
-        # Bridge elements: visible=True so Gradio mounts them in DOM for JS access, hidden by CSS above
-        trajectory_output = gr.Textbox(elem_id="trajectory_output", visible=True)
-        seed_input = gr.Number(value=123, elem_id="seed_input", visible=True)
-        mode_input = gr.Textbox(value="replay", elem_id="mode_input", visible=True)
+        # Bridge elements: visible=True so Gradio mounts them in DOM for JS access, hidden by CSS class
+        trajectory_output = gr.Textbox(elem_id="trajectory_output", elem_classes="bridge-hidden", visible=True)
+        seed_input = gr.Number(value=123, elem_id="seed_input", elem_classes="bridge-hidden", visible=True)
+        mode_input = gr.Textbox(value="replay", elem_id="mode_input", elem_classes="bridge-hidden", visible=True)
         
-        run_btn = gr.Button(elem_id="run_btn", visible=True)
+        run_btn = gr.Button(elem_id="run_btn", elem_classes="bridge-hidden", visible=True)
 
         # Trigger simulation run and return JSON string to textarea
         run_btn.click(
