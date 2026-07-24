@@ -1,11 +1,9 @@
 """
-app.py
-Gradio application serving the CrisisGrid AI Command Center.
-Integrates HTML/CSS/JS frontend with the environment simulation backend.
-Supports:
-  1. Fast Replay Mode (zero-latency replay from pre-cached runs)
-  2. Live AI Inference Mode (real-time LLM inference using Qwen2-1.5B + LoRA)
-  3. Explicit execution errors when the model cannot be loaded.
+[DEPRECATED] app.py — Legacy Gradio Application Entry Point.
+The CrisisGrid platform has been migrated to a full production architecture:
+  - Backend: FastAPI REST & WebSockets server (backend/main.py)
+  - Frontend: Enterprise React 18 + Vite + TypeScript dashboard (frontend/)
+Refer to backend/main.py and frontend/src/App.tsx for production execution.
 """
 
 from __future__ import annotations
