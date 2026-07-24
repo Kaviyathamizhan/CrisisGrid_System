@@ -198,23 +198,14 @@ def run_simulation(seed: int, agent_type: str) -> dict:
         # Pre-execution validation check
         total_count += 1
         is_valid, _ = validate_message(cmd_msg)
-        
-        # Special schema drift logic validation
-        if step == 25:
-            # Schema drift triggers 404
-            is_valid = False
-            
         if is_valid:
             valid_count += 1
 
         # Run environment step
-        # Note: If step is 25, schema drift makes the message fail in Python env rules
         obs_cmd, reward, done, info = env.step(cmd_msg)
         
         # Get step stats
         grid_snap = env.grid.copy().tolist()
-        res_action = info.get("last_action", {}) # Default if not found
-        # Grab flags/events
         flags = env.oversight.get_flags()
         step_flags = [f for f in flags if f.get("step") == step]
 

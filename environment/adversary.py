@@ -8,6 +8,10 @@ import random
 from typing import List, Tuple
 
 
+import numpy as np
+from typing import List, Tuple, Optional
+
+
 class MinimalAdversary:
     """
     Budget-limited adversarial injector.
@@ -15,17 +19,19 @@ class MinimalAdversary:
     Total spikes limited by `budget`.
     """
 
-    def __init__(self, budget: int = 5, severity_boost: float = 0.3,
-                 inject_interval: int = 10):
+    def __init__(self, budget: int = 5, severity_boost: float = 0.25,
+                 inject_interval: int = 10, rng: Optional[np.random.RandomState] = None):
         """
         Args:
             budget:          Maximum number of severity spikes across the episode.
             severity_boost:  How much severity to add per spike (0.0–1.0 scale).
             inject_interval: Inject every N timesteps (e.g., 10 → steps 10, 20, 30, 40).
+            rng:             Optional RandomState instance for reproducibility.
         """
         self.budget = budget
         self.severity_boost = severity_boost
         self.inject_interval = inject_interval
+        self.rng = rng if rng is not None else np.random.RandomState()
         self.spent = 0
         self.injection_log: List[dict] = []
 
@@ -50,9 +56,9 @@ class MinimalAdversary:
         if timestep == 0:
             return grid
 
-        # Pick a random cell to spike
-        i = random.randint(0, 4)
-        j = random.randint(0, 4)
+        # Pick a random cell to spike using seeded RNG
+        i = int(self.rng.randint(0, 5))
+        j = int(self.rng.randint(0, 5))
 
         old_severity = float(grid[i][j][1])
         new_severity = min(1.0, old_severity + self.severity_boost)

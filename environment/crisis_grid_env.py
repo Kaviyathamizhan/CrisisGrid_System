@@ -4,8 +4,8 @@ Main CrisisGrid Environment — 5×5 disaster response grid, 50-timestep episode
 Two agents: Command (RL-trained) + Resource (rule-based) coordinate under constraints.
 
 Key mechanics:
-  - Severity increases +0.02/step/cell (flood spreading)
-  - Resource allocation reduces severity: N units → severity -= N * 0.08
+  - Severity increases +0.012/step/cell (flood spreading)
+  - Resource allocation reduces severity: N units → severity -= N * 0.06
   - Population loss: severity > 0.9 for 3 consecutive steps → -10% population (irreversible)
   - Message truncation: Command Agent messages hard-capped at 50 tokens
   - Schema drift: at step 25, POST /allocate → PATCH /distribution (deterministic)
@@ -31,7 +31,7 @@ class CrisisGridEnv:
 
     State space: float[5][5][4] per cell:
         [0] population  — int, survivors (0–100). Permanent loss when severity > 0.9 for 3+ steps.
-        [1] severity    — float 0.0–1.0. Disaster intensity. +0.02/step. Reduced by allocation.
+        [1] severity    — float 0.0–1.0. Disaster intensity. +0.012/step. Reduced by allocation.
         [2] resources   — int. Units currently assigned to cell.
         [3] zone_id     — int. 0 = Command Agent zone (rows 0–1), 1 = Resource Agent zone (rows 2–4).
     """
@@ -55,7 +55,7 @@ class CrisisGridEnv:
     INIT_POPULATION_RANGE = (40, 100)
     INIT_SEVERITY_RANGE = (0.3, 0.7)    # CHANGE 1: was (0.1,0.4)
 
-    def __init__(self, adversary_budget: int = 8, seed: Optional[int] = None):
+    def __init__(self, adversary_budget: int = 5, seed: Optional[int] = None):
         """
         Args:
             adversary_budget: Max adversarial severity spikes per episode.
@@ -63,13 +63,14 @@ class CrisisGridEnv:
         """
         self.rng = np.random.RandomState(seed)
 
-        # Components
-        self.resource_agent = ResourceAgent()
+        # Components with shared seeded RNG
+        self.resource_agent = ResourceAgent(rng=self.rng)
         self.schema_drift = SchemaDrift()
         self.oversight = OversightLayer()
-        self.adversary = MinimalAdversary(budget=5,
+        self.adversary = MinimalAdversary(budget=adversary_budget,
                                          severity_boost=0.25,
-                                         inject_interval=10)
+                                         inject_interval=10,
+                                         rng=self.rng)
 
         # State
         self.grid = None

@@ -21,167 +21,19 @@ REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO_ROOT)
 
 from environment.crisis_grid_env import CrisisGridEnv
+from utils.agent_utils import (
+    BASE_MODEL,
+    repair_json,
+    decode_action,
+    build_prompt,
+    load_model_and_tokenizer,
+    generate_one,
+)
 from utils.message_utils import validate_message
-
-BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 
 # Global lazy loaded models to avoid memory waste on CPU spaces
 _MODEL = None
 _TOKENIZER = None
-
-
-def _extract_json_object(text: str) -> Optional[str]:
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
-    return text[start : end + 1]
-
-
-def repair_json(text: str) -> Tuple[Optional[Dict[str, Any]], bool, Optional[str]]:
-    raw = (text or "").strip()
-    
-    # Strip markdown fences
-    if raw.startswith("```"):
-        parts = raw.split("```")
-        if len(parts) >= 2:
-            raw = parts[1].strip()
-            if raw.startswith("json"):
-                raw = raw[4:].strip()
-
-    # Repair truncated JSON arrays (50-action lists cut mid-output)
-    if raw.startswith("[") and not raw.endswith("]"):
-        last_brace = raw.rfind("}")
-        if last_brace != -1:
-            raw = raw[:last_brace + 1] + "]"
-
-    candidate = _extract_json_object(raw) or raw
-    try:
-        obj = json.loads(candidate)
-        return (obj if isinstance(obj, dict) else None), False, None
-    except Exception:
-        pass
-
-    for reason, cand in [
-        ("single_to_double_quotes", candidate.replace("'", '"')),
-        ("removed_trailing_commas", candidate.replace("'", '"').replace(",}", "}").replace(",]", "]")),
-    ]:
-        try:
-            obj = json.loads(cand)
-            return (obj if isinstance(obj, dict) else None), True, reason
-        except Exception:
-            continue
-    return None, True, "unparseable_after_repairs"
-
-
-def decode_action(llm_text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    diag: Dict[str, Any] = {
-        "json_repair_triggered": False,
-        "json_repair_reason": None,
-        "decode_fallback": False,
-        "validate_error": None,
-    }
-    msg, repaired, reason = repair_json(llm_text)
-    if repaired:
-        diag["json_repair_triggered"] = True
-        diag["json_repair_reason"] = reason
-
-    if not isinstance(msg, dict):
-        diag["decode_fallback"] = True
-        return None, diag
-
-    ok, err = validate_message(msg)
-    if not ok:
-        diag["validate_error"] = err
-        diag["decode_fallback"] = True
-        return None, diag
-
-    return msg, diag
-
-
-def build_prompt(obs: dict) -> str:
-    timestep = obs.get("timestep", 0)
-    api_status = obs.get("api_status", "active")
-    schema_version = obs.get("current_schema_version", 1)
-    last_error = obs.get("last_error", None)
-    grid = obs.get("grid", [])
-
-    worst = []
-    for i, row in enumerate(grid):
-        for j, cell in enumerate(row):
-            sev = float(cell[1]) if len(cell) > 1 else 0.0
-            worst.append((sev, i * 5 + j))
-    worst.sort(reverse=True)
-    top = [z for _, z in worst[:3]]
-
-    prompt = (
-        "You are the Command Agent for CrisisGrid.\n"
-        "Output ONLY one valid JSON command with keys: intent, zone, resource, priority, units.\n"
-        f"Schema={schema_version} API={api_status}\n"
-    )
-    if last_error:
-        prompt += f"LAST ERROR: {last_error}\n"
-    prompt += f"Step={timestep} critical_zones={top}\nYour JSON command:"
-    return prompt
-
-
-def load_model_and_tokenizer(lora_path_or_repo: str):
-    import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    from peft import PeftModel
-    from huggingface_hub import snapshot_download
-    import json
-
-    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-    # Check GPU availability
-    device_map = "auto" if torch.cuda.is_available() else "cpu"
-    torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL,
-        torch_dtype=torch_dtype,
-        device_map=device_map,
-        low_cpu_mem_usage=True
-    )
-
-    # Construct a compatible PEFT config in memory. Do not mutate the supplied
-    # checkpoint; it may be mounted read-only or shared with training artifacts.
-    adapter_config = None
-    try:
-        local_dir = snapshot_download(lora_path_or_repo)
-    except Exception:
-        local_dir = lora_path_or_repo # Fallback if it's already a local path
-        
-    config_path = os.path.join(local_dir, "adapter_config.json")
-    if os.path.exists(config_path):
-        from peft import LoraConfig
-        import inspect
-        valid_keys = set(inspect.signature(LoraConfig.__init__).parameters.keys())
-        valid_keys.discard("self")
-        with open(config_path, "r") as f:
-            cfg_dict = json.load(f)
-        adapter_config = LoraConfig(**{k: v for k, v in cfg_dict.items() if k in valid_keys})
-
-    model = PeftModel.from_pretrained(model, local_dir, config=adapter_config)
-    model.eval()
-    return model, tokenizer
-
-
-def generate_one(model, tokenizer, prompt: str, max_new_tokens: int = 600) -> str:
-    import torch
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = model.to(device)
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    with torch.no_grad():
-        out = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9,
-        )
-    decoded = tokenizer.decode(out[0], skip_special_tokens=True)
-    return decoded[len(prompt) :].strip() if decoded.startswith(prompt) else decoded.strip()
 
 
 def run_live_inference(seed: int, lora_path_or_repo: str) -> dict:
@@ -216,11 +68,11 @@ def run_live_inference(seed: int, lora_path_or_repo: str) -> dict:
     while not done:
         step = env.timestep + 1
         prompt = build_prompt(obs_cmd)
-        comp = generate_one(_MODEL, _TOKENIZER, prompt, max_new_tokens=100)
-        cmd_msg, diag = decode_action(comp)
+        comp = generate_one(_MODEL, _TOKENIZER, prompt, max_new_tokens=600)
+        cmd_msg, diag = decode_action(comp, rng=env.rng)
 
         total_count += 1
-        is_valid = cmd_msg is not None
+        is_valid = not diag.get("decode_fallback", False)
         if is_valid:
             valid_count += 1
 

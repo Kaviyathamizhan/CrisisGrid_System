@@ -4,7 +4,7 @@ Rule-based Resource Agent. Receives (possibly truncated) Command Agent message.
 Executes valid commands. Refuses malformed ones. Falls back to default if no command.
 """
 
-import random
+import numpy as np
 from typing import Optional
 from utils.message_utils import validate_message, VALID_RESOURCES
 
@@ -19,7 +19,8 @@ class ResourceAgent:
     DEFAULT_RESOURCE = "food"
     DEFAULT_UNITS = 1
 
-    def __init__(self):
+    def __init__(self, rng: Optional[np.random.RandomState] = None):
+        self.rng = rng if rng is not None else np.random.RandomState()
         self.last_action = None
         self.last_reason = None
         self.action_history = []
@@ -63,7 +64,7 @@ class ResourceAgent:
 
     def _default_action(self) -> dict:
         """Fallback when no command received. Penalised in reward."""
-        zone = random.choice(self.ZONE_RANGE)
+        zone = int(self.rng.choice(self.ZONE_RANGE))
         return {
             "action":   "default",
             "zone":     zone,

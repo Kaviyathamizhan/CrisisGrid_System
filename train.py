@@ -32,171 +32,18 @@ sys.path.insert(0, REPO_ROOT)
 
 from environment.crisis_grid_env import CrisisGridEnv
 from utils.message_utils import validate_message
+from utils.agent_utils import (
+    BASE_MODEL,
+    repair_json,
+    decode_action,
+    build_prompt,
+    get_clean_checkpoint_path,
+    load_model_and_tokenizer,
+    generate_one,
+    random_valid_message
+)
 
-
-BASE_MODEL = "Qwen/Qwen2-1.5B-Instruct"
 REQUIRED_FIELDS = ("intent", "zone", "resource", "priority")
-
-
-def _extract_json_object(text: str) -> Optional[str]:
-    """Return the first {...} substring if present."""
-    if not text:
-        return None
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
-    return text[start : end + 1]
-
-
-def repair_json(text: str) -> Tuple[Optional[Dict[str, Any]], bool, Optional[str]]:
-    """
-    Attempt to parse/repair JSON. Returns (dict_or_none, repaired?, reason).
-    Minimal + safe: only a few deterministic transforms.
-    """
-    raw = text.strip()
-    candidate = _extract_json_object(raw) or raw
-
-    # 1) direct
-    try:
-        obj = json.loads(candidate)
-        return (obj if isinstance(obj, dict) else None), False, None
-    except Exception:
-        pass
-
-    # 2) strip code fences
-    if candidate.startswith("```"):
-        parts = candidate.split("```")
-        if len(parts) >= 2:
-            candidate2 = parts[1].strip()
-            if candidate2.startswith("json"):
-                candidate2 = candidate2[4:].strip()
-            try:
-                obj = json.loads(candidate2)
-                return (obj if isinstance(obj, dict) else None), True, "stripped_code_fence"
-            except Exception:
-                candidate = candidate2
-
-    # 3) common repairs: single quotes -> double quotes
-    candidate3 = candidate.replace("'", '"')
-    try:
-        obj = json.loads(candidate3)
-        return (obj if isinstance(obj, dict) else None), True, "single_to_double_quotes"
-    except Exception:
-        pass
-
-    # 4) remove trailing commas before } or ]
-    candidate4 = candidate3.replace(",}", "}").replace(",]", "]")
-    try:
-        obj = json.loads(candidate4)
-        return (obj if isinstance(obj, dict) else None), True, "removed_trailing_commas"
-    except Exception:
-        return None, True, "unparseable_after_repairs"
-
-
-def random_valid_message(rng: np.random.RandomState) -> Dict[str, Any]:
-    return {
-        "intent": "allocate",
-        "zone": int(rng.randint(0, 25)),
-        "resource": str(rng.choice(["medicine", "food", "rescue", "water", "shelter"])),
-        "priority": str(rng.choice(["high", "medium", "low"])),
-        "units": int(rng.randint(1, 6)),
-    }
-
-
-def decode_action(
-    llm_text: str,
-    rng: np.random.RandomState,
-    log_repair: bool = False,
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """
-    Safety check: always return a valid Command message dict.
-    Also returns a small diagnostics dict for logging.
-    """
-    diag: Dict[str, Any] = {
-        "json_repair_triggered": False,
-        "json_repair_reason": None,
-        "decode_fallback": False,
-        "validate_error": None,
-    }
-
-    msg, repaired, reason = repair_json(llm_text)
-    if repaired:
-        diag["json_repair_triggered"] = True
-        diag["json_repair_reason"] = reason
-        if log_repair:
-            print(f"[json-repair] reason={reason}")
-
-    if not isinstance(msg, dict):
-        diag["decode_fallback"] = True
-        return random_valid_message(rng), diag
-
-    # Validate using existing project logic
-    ok, err = validate_message(msg)
-    if not ok:
-        diag["validate_error"] = err
-        diag["decode_fallback"] = True
-        return random_valid_message(rng), diag
-
-    # Ensure required structure (defensive)
-    for k in REQUIRED_FIELDS:
-        if k not in msg:
-            diag["decode_fallback"] = True
-            return random_valid_message(rng), diag
-
-    print(f"[debug] decode_fallback={diag['decode_fallback']}")
-    return msg, diag
-
-
-def build_prompt(obs: dict) -> str:
-    """
-    Build a compact prompt locally for the current environment step.
-    """
-    timestep = obs.get("timestep", 0)
-    api_status = obs.get("api_status", "active")
-    schema_version = obs.get("current_schema_version", 1)
-    last_error = obs.get("last_error", None)
-    grid = obs.get("grid", [])
-
-    worst = []
-    for i, row in enumerate(grid):
-        for j, cell in enumerate(row):
-            sev = float(cell[1]) if len(cell) > 1 else 0.0
-            pop = float(cell[0]) if len(cell) > 0 else 0.0
-            worst.append((sev, i * 5 + j, pop))
-    worst.sort(reverse=True)
-    top3 = worst[:3]
-
-    header = f"Step {timestep}/50 | API v{schema_version} | status={api_status}"
-    if api_status == "deprecated" and last_error:
-        header += f" | last_error={last_error}"
-    critical = " | ".join([f"z{z}(sev={s:.2f},pop={int(p)})" for s, z, p in top3])
-
-    return (
-        "You are the Command Agent in a disaster response simulation.\n"
-        "Output ONLY one valid JSON command.\n"
-        "Required fields: intent, zone, resource, priority. Optional: units.\n"
-        "Valid values: intent=allocate|redirect|hold, zone=0-24, "
-        "resource=medicine|food|rescue|water|shelter, priority=high|medium|low.\n\n"
-        f"{header}\nCritical zones: {critical}\n\nYour JSON command:"
-    )
-
-
-@dataclass
-class TrainConfig:
-    checkpoint_path: str
-    episodes: int
-    seed: int
-    max_completion_length: int
-    max_prompt_length: int
-    lr: float
-    batch_size: int
-    grad_accum: int
-    logging_steps: int
-    save_steps: int
-    output_dir: str
-    sample_generation: bool
-    log_json_repairs: bool
 
 
 def _checkpoint_kind(checkpoint_path: str) -> str:
@@ -212,94 +59,6 @@ def _checkpoint_kind(checkpoint_path: str) -> str:
         if os.path.exists(os.path.join(checkpoint_path, "adapter_config.json")):
             return "lora_adapter"
     return "unknown"
-
-
-def get_clean_checkpoint_path(checkpoint_path: str):
-    import os
-    import json
-    from huggingface_hub import snapshot_download
-    
-    # If it's already a local directory, assume it's clean
-    if os.path.exists(checkpoint_path):
-        print(f"[Checkpoint] Using local path: {checkpoint_path}")
-        return checkpoint_path
-
-    # Use unique cache dir to avoid corruption
-    local_dir = "./patched_checkpoint_cache"
-
-    if not os.path.exists(local_dir):
-        print(f"[Checkpoint] Downloading from HF: {checkpoint_path}")
-        snapshot_download(repo_id=checkpoint_path, local_dir=local_dir)
-
-        config_path = os.path.join(local_dir, "adapter_config.json")
-
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                adapter_cfg = json.load(f)
-
-            # Dynamically find all valid keys for pure PEFT
-            import inspect
-            from peft import LoraConfig
-            valid_keys = set(inspect.signature(LoraConfig.__init__).parameters.keys())
-            valid_keys.update(["peft_type", "auto_mapping", "base_model_name_or_path", "revision", "task_type", "inference_mode"])
-
-            removed_keys = []
-            for k in list(adapter_cfg.keys()):
-                if k not in valid_keys:
-                    adapter_cfg.pop(k)
-                    removed_keys.append(k)
-
-            with open(config_path, "w") as f:
-                json.dump(adapter_cfg, f, indent=2)
-
-            print(f"[Checkpoint] Cleaned keys: {removed_keys}")
-        else:
-            raise FileNotFoundError("adapter_config.json not found in checkpoint")
-    else:
-        print(f"[Checkpoint] Using cached patched checkpoint")
-
-    return local_dir
-
-def _load_model_and_tokenizer(checkpoint_path: str):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    import torch
-
-    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-    model = AutoModelForCausalLM.from_pretrained(
-        BASE_MODEL,
-        torch_dtype="auto",
-        device_map="auto"
-    )
-
-    # Attach LoRA adapter from checkpoint
-    from peft import PeftModel
-    
-    clean_path = get_clean_checkpoint_path(checkpoint_path)
-
-    model = PeftModel.from_pretrained(model, clean_path, is_trainable=True)
-    print("Running in FULL PRECISION mode (pure HF + PEFT)")
-    print("Loaded LoRA adapter successfully")
-    model.eval()
-    return model, tokenizer
-
-
-def _sample_generate(model, tokenizer, prompt: str, max_new_tokens: int = 128) -> str:
-    import torch
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    model = model.to(device)
-
-    with torch.no_grad():
-        out = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9,
-        )
-    decoded = tokenizer.decode(out[0], skip_special_tokens=True)
-    return decoded[len(prompt) :].strip() if decoded.startswith(prompt) else decoded.strip()
 
 
 def main():
@@ -360,13 +119,13 @@ def main():
     env = CrisisGridEnv(seed=cfg.seed)
     rng = np.random.RandomState(cfg.seed)
 
-    model, tokenizer = _load_model_and_tokenizer(cfg.checkpoint_path)
+    model, tokenizer = load_model_and_tokenizer(cfg.checkpoint_path)
 
     # Validate LoRA loading with one sample generation before training
     if cfg.sample_generation:
         obs_cmd, _ = env.reset()
         prompt = build_prompt(obs_cmd)
-        sample = _sample_generate(model, tokenizer, prompt, max_new_tokens=160)
+        sample = generate_one(model, tokenizer, prompt, max_new_tokens=160)
         msg, diag = decode_action(sample, rng, log_repair=cfg.log_json_repairs)
         print("[validate] sample_generation_ok=True")
         print(f"[validate] decoded_msg={msg}")
