@@ -72,22 +72,84 @@ export const App: React.FC = () => {
   const handleLaunchMission = async () => {
     setIsLoadingSim(true);
     setIsPlaying(false);
-    try {
-      if (executionMode === 'live') {
-        const data = await runSimulation({ seed: selectedSeed, mode: 'live' });
-        setActiveTrajectory(data);
-        setMaxSteps(data.steps.length - 1);
-      } else {
+    setStep(0);
+
+    if (executionMode === 'live') {
+      // Use WebSocket streaming for live mode — each step arrives as it's computed
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/api/ws/simulate?seed=${selectedSeed}&mode=live`;
+
+      const liveSteps: any[] = [];
+      const ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const frame = JSON.parse(event.data);
+
+          if (frame.type === 'init') {
+            setMaxSteps(frame.total_steps);
+          } else if (frame.type === 'status') {
+            // Model loading status — keep spinner showing
+            console.log('[CrisisGrid] Backend:', frame.message);
+          } else if (frame.type === 'step') {
+            liveSteps.push(frame.data);
+            // Build partial trajectory and update UI in real-time
+            setActiveTrajectory((prev) => ({
+              agent_type: 'trained',
+              seed: selectedSeed,
+              mode: 'live',
+              steps: [...liveSteps],
+              survival_curve: liveSteps.map((s) => s.survival_rate),
+              severity_curve: liveSteps.map((s) => s.mean_severity),
+              events: prev?.events || [],
+              metrics: prev?.metrics || {
+                final_survival: 0, population_saved: 0, initial_population: 1800,
+                total_reward: 0, agent_reliability: 0, active_emergencies: 0, resource_efficiency: 0,
+              },
+            }));
+            setStep(frame.step);
+            setMaxSteps(Math.max(frame.step, usePlaybackStore.getState().maxSteps));
+          } else if (frame.type === 'complete') {
+            // Final metrics and events
+            setActiveTrajectory((prev) => prev ? ({
+              ...prev,
+              metrics: frame.metrics,
+              events: frame.events || prev.events,
+            }) : prev);
+            setIsLoadingSim(false);
+            setIsPlaying(false);
+            setSummaryModalOpen(true);
+          } else if (frame.type === 'error') {
+            console.error('[CrisisGrid] WebSocket error:', frame.message);
+            setIsLoadingSim(false);
+          }
+        } catch (e) {
+          console.error('Failed to parse WebSocket frame', e);
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket connection error', err);
+        setIsLoadingSim(false);
+      };
+
+      ws.onclose = () => {
+        setIsLoadingSim(false);
+      };
+    } else {
+      // Replay mode — fast REST endpoint
+      try {
         const data = await getReplayTrajectory(selectedSeed);
         setActiveTrajectory(data);
         setMaxSteps(data.steps.length - 1);
+        setStep(0);
+        setIsPlaying(true);
+      } catch (err) {
+        console.error('Mission launch failed', err);
+      } finally {
+        setIsLoadingSim(false);
       }
-      setStep(0);
-      setIsPlaying(true);
-    } catch (err) {
-      console.error('Mission launch failed', err);
-    } finally {
-      setIsLoadingSim(false);
     }
   };
 
