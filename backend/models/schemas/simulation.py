@@ -50,6 +50,14 @@ class SimulationResponse(BaseModel):
     metrics: MetricsSummary
 
 
+class ComparisonResponse(BaseModel):
+    """Response containing both trained and random baseline trajectories for side-by-side comparison."""
+    seed: int
+    mode: str
+    trained: SimulationResponse
+    random: SimulationResponse
+
+
 class WSFrame(BaseModel):
     type: str  # "init" | "step" | "complete" | "error"
     step: Optional[int] = None

@@ -74,6 +74,13 @@ export interface SimulationResponse {
   metrics: MetricsSummary;
 }
 
+export interface ComparisonResponse {
+  seed: number;
+  mode: string;
+  trained: SimulationResponse;
+  random: SimulationResponse;
+}
+
 export interface WSFrame {
   type: 'init' | 'step' | 'complete' | 'error';
   step?: number;

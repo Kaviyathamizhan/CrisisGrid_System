@@ -2,8 +2,7 @@ import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { usePlaybackStore } from './stores/usePlaybackStore';
 import { getHealth } from './services/health';
-import { getAvailableSeeds, getReplayTrajectory } from './services/replay';
-import { runSimulation } from './services/simulation';
+import { getAvailableSeeds, getComparisonTrajectories } from './services/replay';
 import { SimulationResponse } from './types/simulation';
 
 // Components
@@ -44,23 +43,25 @@ export const App: React.FC = () => {
     queryFn: getAvailableSeeds,
   });
 
-  // 3. Trajectory query
-  const [activeTrajectory, setActiveTrajectory] = React.useState<SimulationResponse | undefined>(undefined);
+  // 3. TWO distinct trajectory states — trained policy vs random baseline
+  const [trainedTrajectory, setTrainedTrajectory] = React.useState<SimulationResponse | undefined>(undefined);
+  const [randomTrajectory, setRandomTrajectory] = React.useState<SimulationResponse | undefined>(undefined);
   const [isLoadingSim, setIsLoadingSim] = React.useState<boolean>(false);
 
-  // Load initial replay trajectory on startup or seed change
+  // Load both trajectories on startup or seed change via /api/comparison
   useEffect(() => {
     let isMounted = true;
     setIsLoadingSim(true);
-    getReplayTrajectory(selectedSeed)
+    getComparisonTrajectories(selectedSeed)
       .then((data) => {
         if (isMounted) {
-          setActiveTrajectory(data);
-          setMaxSteps(data.steps.length - 1);
+          setTrainedTrajectory(data.trained);
+          setRandomTrajectory(data.random);
+          setMaxSteps(data.trained.steps.length - 1);
           setStep(0);
         }
       })
-      .catch((err) => console.error('Failed to load initial trajectory', err))
+      .catch((err) => console.error('Failed to load comparison trajectories', err))
       .finally(() => {
         if (isMounted) setIsLoadingSim(false);
       });
@@ -90,12 +91,10 @@ export const App: React.FC = () => {
           if (frame.type === 'init') {
             setMaxSteps(frame.total_steps);
           } else if (frame.type === 'status') {
-            // Model loading status — keep spinner showing
             console.log('[CrisisGrid] Backend:', frame.message);
           } else if (frame.type === 'step') {
             liveSteps.push(frame.data);
-            // Build partial trajectory and update UI in real-time
-            setActiveTrajectory((prev) => ({
+            setTrainedTrajectory((prev) => ({
               agent_type: 'trained',
               seed: selectedSeed,
               mode: 'live',
@@ -111,8 +110,7 @@ export const App: React.FC = () => {
             setStep(frame.step);
             setMaxSteps(Math.max(frame.step, usePlaybackStore.getState().maxSteps));
           } else if (frame.type === 'complete') {
-            // Final metrics and events
-            setActiveTrajectory((prev) => prev ? ({
+            setTrainedTrajectory((prev) => prev ? ({
               ...prev,
               metrics: frame.metrics,
               events: frame.events || prev.events,
@@ -138,11 +136,12 @@ export const App: React.FC = () => {
         setIsLoadingSim(false);
       };
     } else {
-      // Replay mode — fast REST endpoint
+      // Replay mode — fetch both trained and random via comparison endpoint
       try {
-        const data = await getReplayTrajectory(selectedSeed);
-        setActiveTrajectory(data);
-        setMaxSteps(data.steps.length - 1);
+        const data = await getComparisonTrajectories(selectedSeed);
+        setTrainedTrajectory(data.trained);
+        setRandomTrajectory(data.random);
+        setMaxSteps(data.trained.steps.length - 1);
         setStep(0);
         setIsPlaying(true);
       } catch (err) {
@@ -190,8 +189,8 @@ export const App: React.FC = () => {
 
   // Export Incident Report (.md)
   const handleExportReport = () => {
-    if (!activeTrajectory) return;
-    const m = activeTrajectory.metrics;
+    if (!trainedTrajectory) return;
+    const m = trainedTrajectory.metrics;
     let md = `# CrisisGrid AI Operations Platform — Incident Report\n\n`;
     md += `## Mission Parameters\n`;
     md += `- **Scenario Seed**: ${selectedSeed}\n`;
@@ -204,7 +203,7 @@ export const App: React.FC = () => {
     md += `- **Agent Reliability**: ${(m.agent_reliability * 100).toFixed(1)}%\n`;
     md += `- **Active Emergencies at T-50**: ${m.active_emergencies}\n\n`;
     md += `## Timeline Events\n`;
-    activeTrajectory.events.forEach((e) => {
+    trainedTrajectory.events.forEach((e) => {
       md += `- **T-${String(e.step).padStart(2, '0')}:00** [${e.type.toUpperCase()}] ${e.text}\n`;
     });
 
@@ -219,7 +218,9 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const stepTrained = activeTrajectory?.steps[currentStep];
+  // Current step data for each agent — these are DISTINCT objects
+  const stepTrained = trainedTrajectory?.steps[currentStep];
+  const stepRandom = randomTrajectory?.steps[currentStep];
 
   return (
     <div className="h-screen max-h-screen w-screen p-3 flex flex-col gap-3 bg-[#090d16] text-slate-100 overflow-hidden box-border">
@@ -227,7 +228,7 @@ export const App: React.FC = () => {
       <Header health={health} driftStatus={stepTrained?.drift_status} />
 
       {/* 2. Executive KPI Deck */}
-      <MetricsDeck metrics={activeTrajectory?.metrics} survivalRate={stepTrained?.survival_rate} />
+      <MetricsDeck metrics={trainedTrajectory?.metrics} survivalRate={stepTrained?.survival_rate} />
 
       {/* 3. Core Main Dashboard Viewport */}
       <main className="flex-1 flex gap-3 min-h-0">
@@ -241,24 +242,24 @@ export const App: React.FC = () => {
           />
         </aside>
 
-        {/* Center Grid Focal Map */}
+        {/* Center Grid Focal Map — TWO DISTINCT TRAJECTORIES */}
         <section className="flex-1 flex flex-col gap-3 min-h-0">
-          <GridMap stepTrained={stepTrained} stepRandom={stepTrained} />
+          <GridMap stepTrained={stepTrained} stepRandom={stepRandom} />
         </section>
 
         {/* Right Information & Timeline Panel */}
         <aside className="w-[340px] flex flex-col gap-3 shrink-0 min-h-0">
           <ReasoningPanel stepData={stepTrained} />
-          <TimelinePanel steps={activeTrajectory?.steps} events={activeTrajectory?.events} />
+          <TimelinePanel steps={trainedTrajectory?.steps} events={trainedTrajectory?.events} />
           <ChartsPanel
-            survivalCurve={activeTrajectory?.survival_curve}
-            severityCurve={activeTrajectory?.severity_curve}
+            survivalCurve={trainedTrajectory?.survival_curve}
+            severityCurve={trainedTrajectory?.severity_curve}
           />
         </aside>
       </main>
 
       {/* Post-Mission Debrief Modal */}
-      <SummaryModal data={activeTrajectory} onExport={handleExportReport} />
+      <SummaryModal data={trainedTrajectory} onExport={handleExportReport} />
     </div>
   );
 };

@@ -49,6 +49,34 @@ class SimulationService:
         logger.info(f"Seed {seed} not in cache. Simulating episode locally...")
         return self.run_heuristic_simulation(seed)
 
+    def run_comparison_replay(self, seed: int) -> Dict[str, Any]:
+        """Return both trained and random baseline trajectories for side-by-side comparison."""
+        cached = replay_service.get_cached_trajectory(seed)
+        if not cached:
+            logger.info(f"Seed {seed} not in cache for comparison. Generating heuristic fallback.")
+            trained = self.run_heuristic_simulation(seed)
+            return {"seed": seed, "mode": "replay", "trained": trained, "random": trained}
+
+        def _build_response(agent_key: str) -> Dict[str, Any]:
+            agent_data = cached[agent_key]
+            return {
+                "agent_type": agent_key,
+                "seed": seed,
+                "mode": "replay",
+                "steps": agent_data["steps"],
+                "survival_curve": agent_data["survival_curve"],
+                "severity_curve": agent_data["severity_curve"],
+                "events": agent_data["events"],
+                "metrics": agent_data["metrics"]
+            }
+
+        return {
+            "seed": seed,
+            "mode": "replay",
+            "trained": _build_response("trained"),
+            "random": _build_response("random"),
+        }
+
     def run_heuristic_simulation(self, seed: int) -> Dict[str, Any]:
         """Run standard environment simulation with high-reliability heuristic agent."""
         env = CrisisGridEnv(seed=seed)
