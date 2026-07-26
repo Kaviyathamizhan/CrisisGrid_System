@@ -4,6 +4,7 @@ WebSocket streaming endpoint for step-by-step mission playback.
 Supports both 'replay' (cached) and 'live' (real Qwen2 inference) modes.
 """
 
+import time
 import asyncio
 import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
@@ -27,7 +28,8 @@ async def websocket_simulate(
     mode: str = Query(default="replay"),
 ):
     await websocket.accept()
-    logger.info(f"WebSocket connection established: seed={seed}, mode={mode}")
+    logger.info(f"WebSocket Connected: seed={seed}, mode={mode}")
+    logger.info(f"Mission Started: seed={seed}, mode={mode}")
 
     try:
         if mode == "live":
@@ -36,20 +38,23 @@ async def websocket_simulate(
             await _stream_replay(websocket, seed)
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for seed {seed}")
+        logger.info(f"WebSocket Closed (Disconnect): seed={seed}")
     except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}", exc_info=True)
+        logger.error(f"WebSocket Error: {str(e)}", exc_info=True)
         try:
             await websocket.send_json({
                 "type": "error",
-                "message": str(e)
+                "message": f"Mission failed: {str(e)}"
             })
         except Exception:
             pass
+    finally:
+        logger.info(f"WebSocket Closed: seed={seed}")
 
 
 async def _stream_replay(websocket: WebSocket, seed: int):
     """Stream pre-cached replay trajectory step-by-step."""
+    start_time = time.perf_counter()
     sim_data = simulation_service.run_replay(seed)
     steps = sim_data["steps"]
 
@@ -68,30 +73,42 @@ async def _stream_replay(websocket: WebSocket, seed: int):
         })
         await asyncio.sleep(0.05)
 
+    duration = time.perf_counter() - start_time
+    avg_step_ms = round((duration / max(1, len(steps))) * 1000, 2)
+    logger.info(f"Mission Finished: seed={seed}, mode=replay, duration={duration:.2f}s, avg_step_time={avg_step_ms}ms")
+
     await websocket.send_json({
         "type": "complete",
         "metrics": sim_data["metrics"],
-        "events": sim_data["events"]
+        "events": sim_data["events"],
+        "telemetry": {
+            "mission_duration_s": round(duration, 2),
+            "avg_inference_time_ms": avg_step_ms,
+            "fps": round(len(steps) / max(0.1, duration), 1)
+        }
     })
-    logger.info(f"Replay streaming complete for seed {seed}")
 
 
 async def _stream_live_simulation(websocket: WebSocket, seed: int):
-    """Run real Qwen2-1.5B inference and stream each step as it completes."""
+    """Run real Qwen2-1.5B inference and stream each step as it completes with live performance metrics."""
+    mission_start_time = time.perf_counter()
+    
     # Ensure model is loaded
     if not inference_service.is_loaded:
         await websocket.send_json({
             "type": "status",
             "message": "Loading Qwen2-1.5B + LoRA model... This may take 30-60 seconds on CPU."
         })
-        # Run blocking model load in a thread so we don't freeze the event loop
+        load_start = time.perf_counter()
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, inference_service.load_model)
+        logger.info(f"Model Load Time: {time.perf_counter() - load_start:.2f}s")
 
     env = CrisisGridEnv(seed=seed)
     obs_cmd, _ = env.reset()
 
     all_steps = []
+    step_times = []
     initial_step = {
         "step": 0,
         "grid": env.grid.tolist(),
@@ -132,7 +149,7 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
         step_num = env.timestep + 1
         prompt = build_prompt(obs_cmd)
 
-        # Run inference in a thread pool to avoid blocking the event loop
+        step_start = time.perf_counter()
         loop = asyncio.get_event_loop()
         try:
             comp = await loop.run_in_executor(
@@ -144,6 +161,10 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
             logger.error(f"Live inference step {step_num} failed: {str(e)}")
             cmd_msg = None
             diag = {"decode_fallback": True, "error": str(e)}
+
+        step_duration_ms = round((time.perf_counter() - step_start) * 1000, 2)
+        step_times.append(step_duration_ms)
+        logger.info(f"Step {step_num}/50 Inference Time: {step_duration_ms}ms")
 
         total_count += 1
         is_valid = not diag.get("decode_fallback", False)
@@ -166,7 +187,8 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
             "max_severity": float(info.get("max_severity", 0.0)),
             "drift_status": simulation_service.get_drift_status(step_num),
             "oversight_logs": step_flags,
-            "decision_explanation": explanation_service.generate_explanation(cmd_msg, env.grid)
+            "decision_explanation": explanation_service.generate_explanation(cmd_msg, env.grid),
+            "inference_time_ms": step_duration_ms
         }
         all_steps.append(step_data)
 
@@ -177,6 +199,12 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
             "data": step_data
         })
 
+    total_mission_duration = round(time.perf_counter() - mission_start_time, 2)
+    avg_inference_ms = round(sum(step_times) / max(1, len(step_times)), 2)
+    fps = round(len(all_steps) / max(0.1, total_mission_duration), 2)
+
+    logger.info(f"Mission Finished: seed={seed}, mode=live, duration={total_mission_duration}s, avg_inference={avg_inference_ms}ms, FPS={fps}")
+
     # Compute final metrics
     final_metrics = metrics_service.compute_summary(
         env.grid, env.initial_total_population, env.total_reward, info, valid_count, total_count
@@ -186,6 +214,10 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
     await websocket.send_json({
         "type": "complete",
         "metrics": final_metrics,
-        "events": events
+        "events": events,
+        "telemetry": {
+            "mission_duration_s": total_mission_duration,
+            "avg_inference_time_ms": avg_inference_ms,
+            "fps": fps
+        }
     })
-    logger.info(f"Live simulation streaming complete for seed {seed}: {total_count} steps, {valid_count} valid")

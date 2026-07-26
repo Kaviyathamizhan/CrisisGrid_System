@@ -12,6 +12,8 @@ class HealthResponse(BaseModel):
     model_loaded: bool = False
     device: str = "cpu"
     version: str = "2.0.0"
+    cpu_usage_pct: Optional[float] = None
+    memory_mb: Optional[float] = None
 
 
 class SeedsResponse(BaseModel):

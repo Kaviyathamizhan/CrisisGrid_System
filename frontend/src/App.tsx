@@ -14,6 +14,7 @@ import { ReasoningPanel } from './components/reasoning/ReasoningPanel';
 import { TimelinePanel } from './components/timeline/TimelinePanel';
 import { ChartsPanel } from './components/charts/ChartsPanel';
 import { SummaryModal } from './components/common/SummaryModal';
+import { ErrorModal } from './components/common/ErrorModal';
 
 export const App: React.FC = () => {
   const {
@@ -43,10 +44,14 @@ export const App: React.FC = () => {
     queryFn: getAvailableSeeds,
   });
 
-  // 3. TWO distinct trajectory states — trained policy vs random baseline
+  // 3. Trajectory & Error State
   const [trainedTrajectory, setTrainedTrajectory] = React.useState<SimulationResponse | undefined>(undefined);
   const [randomTrajectory, setRandomTrajectory] = React.useState<SimulationResponse | undefined>(undefined);
   const [isLoadingSim, setIsLoadingSim] = React.useState<boolean>(false);
+  const [errorState, setErrorState] = React.useState<{ isOpen: boolean; message: string | null; reason?: string }>({
+    isOpen: false,
+    message: null,
+  });
 
   // Load both trajectories on startup or seed change via /api/comparison
   useEffect(() => {
@@ -61,7 +66,14 @@ export const App: React.FC = () => {
           setStep(0);
         }
       })
-      .catch((err) => console.error('Failed to load comparison trajectories', err))
+      .catch((err) => {
+        console.error('Failed to load comparison trajectories', err);
+        setErrorState({
+          isOpen: true,
+          message: err.message || 'Connection error',
+          reason: 'Failed to fetch trajectory data from backend server',
+        });
+      })
       .finally(() => {
         if (isMounted) setIsLoadingSim(false);
       });
@@ -73,6 +85,7 @@ export const App: React.FC = () => {
   const handleLaunchMission = async () => {
     setIsLoadingSim(true);
     setIsPlaying(false);
+    setErrorState({ isOpen: false, message: null });
     setStep(0);
 
     if (executionMode === 'live') {
@@ -91,7 +104,7 @@ export const App: React.FC = () => {
           if (frame.type === 'init') {
             setMaxSteps(frame.total_steps);
           } else if (frame.type === 'status') {
-            console.log('[CrisisGrid] Backend:', frame.message);
+            console.log('[CrisisGrid] Backend Status:', frame.message);
           } else if (frame.type === 'step') {
             liveSteps.push(frame.data);
             setTrainedTrajectory((prev) => ({
@@ -121,8 +134,13 @@ export const App: React.FC = () => {
           } else if (frame.type === 'error') {
             console.error('[CrisisGrid] WebSocket error:', frame.message);
             setIsLoadingSim(false);
+            setErrorState({
+              isOpen: true,
+              message: frame.message || 'Live simulation failed',
+              reason: 'PyTorch model inference or execution exception',
+            });
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error('Failed to parse WebSocket frame', e);
         }
       };
@@ -130,6 +148,11 @@ export const App: React.FC = () => {
       ws.onerror = (err) => {
         console.error('WebSocket connection error', err);
         setIsLoadingSim(false);
+        setErrorState({
+          isOpen: true,
+          message: 'WebSocket connection failed or dropped',
+          reason: 'Network disconnect or backend server process terminated',
+        });
       };
 
       ws.onclose = () => {
@@ -144,8 +167,13 @@ export const App: React.FC = () => {
         setMaxSteps(data.trained.steps.length - 1);
         setStep(0);
         setIsPlaying(true);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Mission launch failed', err);
+        setErrorState({
+          isOpen: true,
+          message: err.message || 'Mission launch error',
+          reason: 'Backend service unreachable or rejected request',
+        });
       } finally {
         setIsLoadingSim(false);
       }
@@ -218,7 +246,6 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Current step data for each agent — these are DISTINCT objects
   const stepTrained = trainedTrajectory?.steps[currentStep];
   const stepRandom = randomTrajectory?.steps[currentStep];
 
@@ -242,7 +269,7 @@ export const App: React.FC = () => {
           />
         </aside>
 
-        {/* Center Grid Focal Map — TWO DISTINCT TRAJECTORIES */}
+        {/* Center Grid Focal Map */}
         <section className="flex-1 flex flex-col gap-3 min-h-0">
           <GridMap stepTrained={stepTrained} stepRandom={stepRandom} />
         </section>
@@ -260,6 +287,15 @@ export const App: React.FC = () => {
 
       {/* Post-Mission Debrief Modal */}
       <SummaryModal data={trainedTrajectory} onExport={handleExportReport} />
+
+      {/* Rich Error Recovery Modal */}
+      <ErrorModal
+        isOpen={errorState.isOpen}
+        errorMessage={errorState.message}
+        errorReason={errorState.reason}
+        onRetry={handleLaunchMission}
+        onClose={() => setErrorState({ isOpen: false, message: null })}
+      />
     </div>
   );
 };
