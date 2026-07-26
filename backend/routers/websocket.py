@@ -90,7 +90,7 @@ async def _stream_replay(websocket: WebSocket, seed: int):
 
 
 async def _stream_live_simulation(websocket: WebSocket, seed: int):
-    """Run real Qwen2-1.5B inference and stream each step as it completes with live performance metrics."""
+    """Run real Qwen2-1.5B inference and stream each step with precise sub-stage profiling."""
     mission_start_time = time.perf_counter()
     
     # Ensure model is loaded
@@ -108,7 +108,8 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
     obs_cmd, _ = env.reset()
 
     all_steps = []
-    step_times = []
+    inf_times, env_times, ser_times, ws_times = [], [], [], []
+
     initial_step = {
         "step": 0,
         "grid": env.grid.tolist(),
@@ -149,7 +150,8 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
         step_num = env.timestep + 1
         prompt = build_prompt(obs_cmd)
 
-        step_start = time.perf_counter()
+        # Stage 1: LLM Inference
+        t_inf_start = time.perf_counter()
         loop = asyncio.get_event_loop()
         try:
             comp = await loop.run_in_executor(
@@ -162,18 +164,21 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
             cmd_msg = None
             diag = {"decode_fallback": True, "error": str(e)}
 
-        step_duration_ms = round((time.perf_counter() - step_start) * 1000, 2)
-        step_times.append(step_duration_ms)
-        logger.info(f"Step {step_num}/50 Inference Time: {step_duration_ms}ms")
+        inf_ms = round((time.perf_counter() - t_inf_start) * 1000, 3)
+        inf_times.append(inf_ms)
 
         total_count += 1
         is_valid = not diag.get("decode_fallback", False)
         if is_valid:
             valid_count += 1
 
+        # Stage 2: Environment Step
+        t_env_start = time.perf_counter()
         obs_cmd, reward, done, info = env.step(cmd_msg)
         flags = env.oversight.get_flags()
         step_flags = [f for f in flags if f.get("step") == step_num]
+        env_ms = round((time.perf_counter() - t_env_start) * 1000, 3)
+        env_times.append(env_ms)
 
         step_data = {
             "step": step_num,
@@ -188,22 +193,49 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
             "drift_status": simulation_service.get_drift_status(step_num),
             "oversight_logs": step_flags,
             "decision_explanation": explanation_service.generate_explanation(cmd_msg, env.grid),
-            "inference_time_ms": step_duration_ms
+            "profiling": {
+                "inference_ms": inf_ms,
+                "env_step_ms": env_ms
+            }
         }
         all_steps.append(step_data)
 
-        # Stream this step to the client immediately
-        await websocket.send_json({
+        # Stage 3: JSON Serialization
+        t_ser_start = time.perf_counter()
+        frame_payload = {
             "type": "step",
             "step": step_num,
             "data": step_data
-        })
+        }
+        json_bytes = json.dumps(frame_payload)
+        ser_ms = round((time.perf_counter() - t_ser_start) * 1000, 3)
+        ser_times.append(ser_ms)
+
+        # Stage 4: WebSocket Transmission
+        t_ws_start = time.perf_counter()
+        await websocket.send_text(json_bytes)
+        ws_ms = round((time.perf_counter() - t_ws_start) * 1000, 3)
+        ws_times.append(ws_ms)
+
+        logger.info(
+            f"Step {step_num:02d}/50 Profile | Inf: {inf_ms:.1f}ms | Env: {env_ms:.2f}ms | Ser: {ser_ms:.2f}ms | WS: {ws_ms:.2f}ms"
+        )
 
     total_mission_duration = round(time.perf_counter() - mission_start_time, 2)
-    avg_inference_ms = round(sum(step_times) / max(1, len(step_times)), 2)
+    avg_inf = round(sum(inf_times) / max(1, len(inf_times)), 2)
+    avg_env = round(sum(env_times) / max(1, len(env_times)), 3)
+    avg_ser = round(sum(ser_times) / max(1, len(ser_times)), 3)
+    avg_ws = round(sum(ws_times) / max(1, len(ws_times)), 3)
     fps = round(len(all_steps) / max(0.1, total_mission_duration), 2)
 
-    logger.info(f"Mission Finished: seed={seed}, mode=live, duration={total_mission_duration}s, avg_inference={avg_inference_ms}ms, FPS={fps}")
+    logger.info("=" * 80)
+    logger.info(f"PERFORMANCE PROFILING SUMMARY (Seed {seed}):")
+    logger.info(f"  1. LLM Inference     : {avg_inf:>8.2f} ms")
+    logger.info(f"  2. Environment Step  : {avg_env:>8.3f} ms")
+    logger.info(f"  3. Serialization     : {avg_ser:>8.3f} ms")
+    logger.info(f"  4. WebSocket Send    : {avg_ws:>8.3f} ms")
+    logger.info(f"  Total Mission Time   : {total_mission_duration:>8.2f} s ({fps} FPS)")
+    logger.info("=" * 80)
 
     # Compute final metrics
     final_metrics = metrics_service.compute_summary(
@@ -217,7 +249,10 @@ async def _stream_live_simulation(websocket: WebSocket, seed: int):
         "events": events,
         "telemetry": {
             "mission_duration_s": total_mission_duration,
-            "avg_inference_time_ms": avg_inference_ms,
+            "avg_inference_time_ms": avg_inf,
+            "avg_env_step_time_ms": avg_env,
+            "avg_serialization_time_ms": avg_ser,
+            "avg_websocket_send_ms": avg_ws,
             "fps": fps
         }
     })
