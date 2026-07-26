@@ -96,6 +96,21 @@ class SimulationService:
         random_pop = random_res["metrics"]["population_saved"]
         pop_delta = trained_pop - random_pop
 
+        # Compute decision similarity (fraction of timesteps where action zones matched)
+        matching_actions = 0
+        total_action_steps = 0
+        for t_step, r_step in zip(trained_res["steps"], random_res["steps"]):
+            t_msg = t_step.get("cmd_msg")
+            r_msg = r_step.get("cmd_msg")
+            if t_msg and r_msg:
+                total_action_steps += 1
+                t_zone = str(t_msg.get("zone", t_msg.get("geo_hash", "")))
+                r_zone = str(r_msg.get("zone", r_msg.get("geo_hash", "")))
+                if t_zone and r_zone and t_zone == r_zone:
+                    matching_actions += 1
+
+        decision_similarity = round(matching_actions / total_action_steps, 4) if total_action_steps > 0 else 0.0
+
         return {
             "seed": seed,
             "mode": "replay",
@@ -105,6 +120,7 @@ class SimulationService:
                 "survival_delta": survival_delta,
                 "population_saved_delta": pop_delta,
                 "policies_match": policies_match,
+                "decision_similarity": decision_similarity,
             }
         }
 

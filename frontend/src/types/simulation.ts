@@ -78,6 +78,7 @@ export interface ComparisonMeta {
   survival_delta: number;
   population_saved_delta: number;
   policies_match: boolean;
+  decision_similarity: number;
 }
 
 export interface ComparisonResponse {

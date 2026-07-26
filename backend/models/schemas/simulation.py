@@ -54,6 +54,7 @@ class ComparisonMeta(BaseModel):
     survival_delta: float = Field(..., description="Trained final survival minus random final survival (percentage points)")
     population_saved_delta: int = Field(..., description="Trained survivors saved minus random survivors saved")
     policies_match: bool = Field(..., description="True if trained and random trajectories are identical (should be False)")
+    decision_similarity: float = Field(..., description="Fraction of timesteps where trained and random actions matched (0.0 to 1.0)")
 
 
 class ComparisonResponse(BaseModel):
