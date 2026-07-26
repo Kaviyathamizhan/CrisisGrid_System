@@ -50,12 +50,19 @@ class SimulationResponse(BaseModel):
     metrics: MetricsSummary
 
 
+class ComparisonMeta(BaseModel):
+    survival_delta: float = Field(..., description="Trained final survival minus random final survival (percentage points)")
+    population_saved_delta: int = Field(..., description="Trained survivors saved minus random survivors saved")
+    policies_match: bool = Field(..., description="True if trained and random trajectories are identical (should be False)")
+
+
 class ComparisonResponse(BaseModel):
     """Response containing both trained and random baseline trajectories for side-by-side comparison."""
     seed: int
     mode: str
     trained: SimulationResponse
     random: SimulationResponse
+    comparison: ComparisonMeta
 
 
 class WSFrame(BaseModel):

@@ -74,11 +74,18 @@ export interface SimulationResponse {
   metrics: MetricsSummary;
 }
 
+export interface ComparisonMeta {
+  survival_delta: number;
+  population_saved_delta: number;
+  policies_match: boolean;
+}
+
 export interface ComparisonResponse {
   seed: number;
   mode: string;
   trained: SimulationResponse;
   random: SimulationResponse;
+  comparison: ComparisonMeta;
 }
 
 export interface WSFrame {

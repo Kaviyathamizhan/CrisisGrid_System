@@ -50,12 +50,22 @@ class SimulationService:
         return self.run_heuristic_simulation(seed)
 
     def run_comparison_replay(self, seed: int) -> Dict[str, Any]:
-        """Return both trained and random baseline trajectories for side-by-side comparison."""
+        """Return both trained and random baseline trajectories for side-by-side comparison with validation metadata."""
         cached = replay_service.get_cached_trajectory(seed)
         if not cached:
             logger.info(f"Seed {seed} not in cache for comparison. Generating heuristic fallback.")
             trained = self.run_heuristic_simulation(seed)
-            return {"seed": seed, "mode": "replay", "trained": trained, "random": trained}
+            return {
+                "seed": seed,
+                "mode": "replay",
+                "trained": trained,
+                "random": trained,
+                "comparison": {
+                    "survival_delta": 0.0,
+                    "population_saved_delta": 0,
+                    "policies_match": True,
+                }
+            }
 
         def _build_response(agent_key: str) -> Dict[str, Any]:
             agent_data = cached[agent_key]
@@ -70,11 +80,32 @@ class SimulationService:
                 "metrics": agent_data["metrics"]
             }
 
+        trained_res = _build_response("trained")
+        random_res = _build_response("random")
+
+        # Safeguard: Assert trajectories are distinct
+        policies_match = trained_res["steps"] == random_res["steps"]
+        if policies_match:
+            logger.error(f"[Safeguard Alert] Seed {seed}: Trained and Random trajectories are identical!")
+
+        trained_surv = trained_res["metrics"]["final_survival"]
+        random_surv = random_res["metrics"]["final_survival"]
+        survival_delta = round((trained_surv - random_surv) * 100, 2)
+
+        trained_pop = trained_res["metrics"]["population_saved"]
+        random_pop = random_res["metrics"]["population_saved"]
+        pop_delta = trained_pop - random_pop
+
         return {
             "seed": seed,
             "mode": "replay",
-            "trained": _build_response("trained"),
-            "random": _build_response("random"),
+            "trained": trained_res,
+            "random": random_res,
+            "comparison": {
+                "survival_delta": survival_delta,
+                "population_saved_delta": pop_delta,
+                "policies_match": policies_match,
+            }
         }
 
     def run_heuristic_simulation(self, seed: int) -> Dict[str, Any]:
