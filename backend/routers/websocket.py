@@ -4,6 +4,7 @@ WebSocket streaming endpoint for step-by-step mission playback.
 Supports both 'replay' (cached) and 'live' (real Qwen2 inference) modes.
 """
 
+import json
 import time
 import asyncio
 import numpy as np
@@ -19,6 +20,23 @@ from utils.agent_utils import build_prompt, decode_action
 
 logger = get_logger("WebSocketRouter")
 router = APIRouter(tags=["WebSocket"])
+
+
+def classify_exception_category(exc: Exception) -> str:
+    """Categorize exceptions into structured categories for frontend diagnostic handling."""
+    exc_type = type(exc).__name__
+    exc_msg = str(exc).lower()
+
+    if exc_type in ("NameError", "TypeError", "AttributeError", "KeyError") or "json" in exc_msg or "serialize" in exc_msg:
+        return "serialization"
+    elif "cuda" in exc_msg or "torch" in exc_msg or "inference" in exc_msg or "model" in exc_msg:
+        return "inference"
+    elif "env" in exc_msg or "step" in exc_msg or "grid" in exc_msg:
+        return "environment"
+    elif exc_type in ("WebSocketDisconnect", "RuntimeError", "ConnectionError") or "websocket" in exc_msg or "socket" in exc_msg:
+        return "network"
+    else:
+        return "runtime"
 
 
 @router.websocket("/ws/simulate")
@@ -40,10 +58,13 @@ async def websocket_simulate(
     except WebSocketDisconnect:
         logger.info(f"WebSocket Closed (Disconnect): seed={seed}")
     except Exception as e:
-        logger.error(f"WebSocket Error: {str(e)}", exc_info=True)
+        logger.exception(f"WebSocket execution exception on seed {seed}")
+        category = classify_exception_category(e)
         try:
             await websocket.send_json({
                 "type": "error",
+                "category": category,
+                "exception": type(e).__name__,
                 "message": f"Mission failed: {str(e)}"
             })
         except Exception:

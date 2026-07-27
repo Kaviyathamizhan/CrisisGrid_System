@@ -132,12 +132,31 @@ export const App: React.FC = () => {
             setIsPlaying(false);
             setSummaryModalOpen(true);
           } else if (frame.type === 'error') {
-            console.error('[CrisisGrid] WebSocket error:', frame.message);
+            console.error('[CrisisGrid] WebSocket error frame:', frame);
             setIsLoadingSim(false);
+
+            let reasonStr = 'Backend Execution Error';
+            switch (frame.category) {
+              case 'serialization':
+                reasonStr = `Backend Data Serialization Exception (${frame.exception || 'NameError'})`;
+                break;
+              case 'inference':
+                reasonStr = `PyTorch Model Inference Exception (${frame.exception || 'Model Error'})`;
+                break;
+              case 'environment':
+                reasonStr = `CrisisGrid Environment Simulation Error (${frame.exception || 'Gym Error'})`;
+                break;
+              case 'network':
+                reasonStr = `WebSocket Connection / Transmission Error (${frame.exception || 'Socket Disconnect'})`;
+                break;
+              default:
+                reasonStr = `Backend Runtime Exception (${frame.exception || 'Python Error'})`;
+            }
+
             setErrorState({
               isOpen: true,
-              message: frame.message || 'Live simulation failed',
-              reason: 'PyTorch model inference or execution exception',
+              message: frame.message || 'Live simulation stream failed',
+              reason: reasonStr,
             });
           }
         } catch (e: any) {

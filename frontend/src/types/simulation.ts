@@ -90,12 +90,15 @@ export interface ComparisonResponse {
 }
 
 export interface WSFrame {
-  type: 'init' | 'step' | 'complete' | 'error';
+  type: 'init' | 'step' | 'complete' | 'error' | 'status';
   step?: number;
   data?: any;
-  seed?: number;
-  total_steps?: number;
+  category?: 'serialization' | 'inference' | 'environment' | 'network' | 'runtime' | string;
+  exception?: string;
+  message?: string;
   metrics?: MetricsSummary;
   events?: EventItem[];
-  message?: string;
+  telemetry?: any;
+  seed?: number;
+  total_steps?: number;
 }
